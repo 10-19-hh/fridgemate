@@ -17,6 +17,12 @@ vi.mock('../usePantryStaples.js', () => ({
     pantryStaples: [{ id: 'salt', name: '소금' }],
     pantryOwnership: { salt: 'owned' },
     pantrySummary: { owned: 1, missing: 0, unknown: 0 },
+    syncError: '로컬 저장을 확인해주세요',
+    saving: true,
+    storageReady: false,
+    canRetrySave: true,
+    reloadPantryOwnership: 'reload-fixture',
+    retryPantrySave: 'retry-fixture',
     cyclePantryStatus: vi.fn()
   })
 }));
@@ -36,5 +42,7 @@ describe('useRecipesPageModel', () => {
     expect(result.current.useSoonRecommendations).toHaveLength(1);
     expect(result.current.ownedPantryCount).toBe(1);
     expect(result.current.ownedPantryItems).toEqual(['소금']);
+    expect(result.current).toMatchObject({ pantryError: '로컬 저장을 확인해주세요', pantrySaving: true,
+      pantryStorageReady: false, pantryCanRetrySave: true, reloadPantryOwnership: 'reload-fixture', retryPantrySave: 'retry-fixture' });
   });
 });

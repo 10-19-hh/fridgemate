@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ANALYTICS_ID_STORAGE_KEY,
   ANALYTICS_SESSION_ID_STORAGE_KEY,
@@ -25,6 +25,7 @@ vi.mock('../../api/productEventsApi', () => ({
 
 describe('analytics utilities', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     window.localStorage.clear();
     window.sessionStorage.clear();
@@ -33,6 +34,8 @@ describe('analytics utilities', () => {
     saveProductEventMock.mockReset().mockResolvedValue(null);
     setAnalyticsConsent('granted');
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   it('reuses stored anonymous and session ids', () => {
     const analyticsId = getAnonymousAnalyticsId();
@@ -155,6 +158,48 @@ describe('analytics utilities', () => {
     expect(window.sessionStorage.getItem(ANALYTICS_SESSION_ID_STORAGE_KEY)).toBeNull();
     expect(window.sessionStorage.getItem(ANALYTICS_SESSION_STARTED_STORAGE_KEY)).toBeNull();
     expect(window.__FRIDGEMATE_ANALYTICS_EVENTS__).toEqual([]);
+  });
+
+  it.each(['property', 'getItem', 'setItem'])('does not create events when sessionStorage %s is blocked', (failure) => {
+    const blocked = () => { throw new DOMException('private storage detail', 'SecurityError'); };
+    if (failure === 'property') {
+      vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(blocked);
+    } else {
+      const original = Storage.prototype[failure];
+      vi.spyOn(Storage.prototype, failure).mockImplementation(function (...args) {
+        if (this === window.sessionStorage) return blocked();
+        return original.apply(this, args);
+      });
+    }
+
+    expect(() => getAnalyticsSessionId()).not.toThrow();
+    expect(getAnalyticsSessionId()).toBeNull();
+    expect(() => hasTrackedSessionStarted()).not.toThrow();
+    expect(hasTrackedSessionStarted()).toBe(false);
+    expect(() => markSessionStartedTracked()).not.toThrow();
+    const payload = buildAnalyticsPayload({ eventName: 'page_view', route: '/', isAuthenticated: true });
+    expect(payload).toBeNull();
+    expect(recordAnalyticsEvent(payload)).toBeNull();
+    expect(window.__FRIDGEMATE_ANALYTICS_EVENTS__).toEqual([]);
+    expect(saveProductEventMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['getItem', 'setItem'])('does not create events when local analytics ID %s fails', (failure) => {
+    const original = Storage.prototype[failure];
+    vi.spyOn(Storage.prototype, failure).mockImplementation(function (key, ...args) {
+      if (this === window.localStorage && key === ANALYTICS_ID_STORAGE_KEY) {
+        throw new DOMException('private storage detail', 'SecurityError');
+      }
+      return original.call(this, key, ...args);
+    });
+
+    expect(() => getAnonymousAnalyticsId()).not.toThrow();
+    expect(getAnonymousAnalyticsId()).toBeNull();
+    const payload = buildAnalyticsPayload({ eventName: 'page_view', route: '/', isAuthenticated: true });
+    expect(payload).toBeNull();
+    expect(recordAnalyticsEvent(payload)).toBeNull();
+    expect(window.__FRIDGEMATE_ANALYTICS_EVENTS__).toEqual([]);
+    expect(saveProductEventMock).not.toHaveBeenCalled();
   });
 
   it('does not persist or emit identifiers without a secure random source', () => {

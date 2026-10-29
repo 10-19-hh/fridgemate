@@ -249,6 +249,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
   .meal-plan-page *, .meal-plan-page *::before, .meal-plan-page *::after {
     transition: none !important;
     animation: none !important;

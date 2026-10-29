@@ -1,4 +1,5 @@
 import { ApiClientError, requestJson } from './apiClient';
+import { isLocalPilotBuild } from '../utils/pilotMode.js';
 import {
   createExternalAiRequestSignal,
   EXTERNAL_AI_ACTIONS
@@ -12,6 +13,7 @@ export class ImportCorrectionsApiError extends ApiClientError {
 }
 
 export function isRemoteImportLearningEnabled() {
+  if (isLocalPilotBuild()) return false;
   return String(import.meta.env.VITE_ENABLE_REMOTE_IMPORT_LEARNING || '').toLowerCase() === 'true';
 }
 

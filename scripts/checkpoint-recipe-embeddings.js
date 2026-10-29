@@ -5,6 +5,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { PrismaClient } from '@prisma/client';
+import { runReadOnlyTransaction } from './lib/readOnlyTransaction.js';
 
 const DEFAULT_OUTPUT_DIR = '.local/recipe-embedding-checkpoints';
 
@@ -105,25 +106,14 @@ async function loadGroupSummary(prisma) {
   };
 }
 
-async function runReadOnly(prisma, operation) {
-  if (typeof prisma.$transaction !== 'function') return operation(prisma);
-  return prisma.$transaction(
-    async (transaction) => {
-      await transaction.$executeRawUnsafe('SET TRANSACTION READ ONLY');
-      return operation(transaction);
-    },
-    { maxWait: 10000, timeout: 600000 }
-  );
-}
-
 export async function createRecipeEmbeddingCheckpoint(options = parseCheckpointArgs()) {
   const prisma = options.prismaClient || new PrismaClient();
   try {
     if (options.dryRun) {
-      return { ...(await runReadOnly(prisma, loadGroupSummary)), dryRun: true };
+      return { ...(await runReadOnlyTransaction(prisma, loadGroupSummary)), dryRun: true };
     }
 
-    const rows = await runReadOnly(prisma, loadRows);
+    const rows = await runReadOnlyTransaction(prisma, loadRows);
     const groups = summarizeGroups(rows);
 
     const createdAt = options.now || new Date();

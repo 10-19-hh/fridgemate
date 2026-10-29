@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { pathToFileURL } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { embedRecipes, getEmbeddingConfig } from './embed-recipes.js';
+import { runReadOnlyTransaction } from './lib/readOnlyTransaction.js';
 
 const EXPECTED_FIELDS = {
   '--expect-recipes=': 'recipes',
@@ -101,17 +102,6 @@ async function loadIntegritySnapshot(prisma) {
   };
 }
 
-async function runReadOnly(prisma, operation) {
-  if (typeof prisma.$transaction !== 'function') return operation(prisma);
-  return prisma.$transaction(
-    async (transaction) => {
-      await transaction.$executeRawUnsafe('SET TRANSACTION READ ONLY');
-      return operation(transaction);
-    },
-    { maxWait: 10000, timeout: 600000 }
-  );
-}
-
 function addExpectationFailure(failures, label, actual, expected) {
   if (expected !== null && expected !== undefined && actual !== expected) {
     failures.push(`${label}: expected ${expected}, received ${actual}`);
@@ -124,7 +114,7 @@ export async function verifyRecipeEmbeddings(options = parseVerificationArgs()) 
   const config = { ...getEmbeddingConfig(), ...options.embeddingConfig };
 
   try {
-    return await runReadOnly(prisma, async (transaction) => {
+    return await runReadOnlyTransaction(prisma, async (transaction) => {
       const integrity = await loadIntegritySnapshot(transaction);
       const scanSummary = await scan({
         dryRun: true,

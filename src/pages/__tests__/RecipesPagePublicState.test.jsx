@@ -59,4 +59,22 @@ describe('RecipesPage public state', () => {
     expect(cyclePantryStatus).toHaveBeenCalledWith('salt');
     expect(screen.getByRole('region', { name: '남은 재료로 무엇을 만들까요?' })).toBeInTheDocument();
   });
+
+  it('labels unreadable pantry settings as needing confirmation before the panel is opened', async () => {
+    const user = userEvent.setup();
+    const reloadPantryOwnership = vi.fn();
+    model.pantryStorageReady = false;
+    model.pantryError = '이 기기의 팬트리 설정을 불러오지 못했어요.';
+    model.reloadPantryOwnership = reloadPantryOwnership;
+    render(<MemoryRouter initialEntries={['/recipes']}><RecipesPage /></MemoryRouter>);
+
+    const summary = screen.getByText('보유 양념 설정 · 확인 필요');
+    expect(summary.closest('details')).not.toHaveAttribute('open');
+    expect(screen.queryByText('보유 양념 설정 · 0개 보유')).not.toBeInTheDocument();
+    await user.click(summary);
+    expect(screen.getByRole('alert')).toHaveTextContent(model.pantryError);
+    expect(screen.getByRole('button', { name: /^소금\s*모름$/u })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: '팬트리 설정 다시 확인' }));
+    expect(reloadPantryOwnership).toHaveBeenCalledOnce();
+  });
 });

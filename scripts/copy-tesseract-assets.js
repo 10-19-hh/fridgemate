@@ -1,9 +1,10 @@
 import { copyFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getBuildOutputDirectory } from './lib/localPilotBuild.js';
 
 const projectRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const outputRoot = join(projectRoot, 'dist', 'ocr', 'tesseract');
+const outputRoot = join(projectRoot, getBuildOutputDirectory(), 'ocr', 'tesseract');
 
 const assetCopies = [
   ['node_modules/tesseract.js/dist/worker.min.js', 'worker.min.js'],

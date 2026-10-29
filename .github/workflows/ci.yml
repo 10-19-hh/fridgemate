@@ -55,6 +55,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate schema and generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://ci:ci@127.0.0.1:9/fridgemate_ci
+          DIRECT_URL: postgresql://ci:ci@127.0.0.1:9/fridgemate_ci
+        run: |
+          npm run prisma:validate
+          npm run prisma:generate
+
       - name: Run tests
         run: npm run test:run
 
@@ -113,3 +121,17 @@ jobs:
 
       - name: Run Playwright E2E tests
         run: npm run test:e2e
+
+      - name: Build local-only browser verification artifact
+        env:
+          VITE_API_URL: ""
+          VITE_API_URL_OVERRIDE: ""
+          VITE_API_BASE_URL: ""
+          VITE_ADSENSE_VERIFICATION_ENABLED: "false"
+          VITE_ADSENSE_SERVING_ENABLED: "false"
+          VITE_GA_MEASUREMENT_ID: ""
+          VITE_SENTRY_DSN: ""
+        run: npm run build
+
+      - name: Verify built artifact in Chromium
+        run: npm run test:e2e:preview

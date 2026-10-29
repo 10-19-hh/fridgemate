@@ -16,6 +16,7 @@ const pages = {
   IngredientsPage: lazy(() => import('./pages/IngredientsPage')),
   LoginPage: lazy(() => import('./pages/LoginPage')),
   MealPlanPage: lazy(() => import('./pages/MealPlanPage')),
+  MealPlanPilotPage: lazy(() => import('./pages/MealPlanPilotPage')),
   NotFoundPage: lazy(() => import('./pages/NotFoundPage')),
   PrivacyPage: lazy(() => import('./pages/PrivacyPage')),
   PublicRecipePage: lazy(() => import('./pages/PublicRecipePage')),

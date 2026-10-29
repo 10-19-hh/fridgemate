@@ -13,7 +13,7 @@ function shouldFallbackToLocalRecommendations(error) {
 
 export function useRecipeRecommendations(pantryItems = []) {
   const { isAuthenticated } = useAuth();
-  const { ingredients, loading: ingredientsLoading } = useIngredients();
+  const { ingredients, loading: ingredientsLoading, readError, loadIngredients } = useIngredients();
   const { preferences } = useOptionalUserPreferences();
   const requestIdRef = useRef(0);
   const localRecommendations = useMemo(
@@ -87,6 +87,8 @@ export function useRecipeRecommendations(pantryItems = []) {
     loading,
     error,
     dataSource,
-    ingredients
+    ingredients,
+    readError,
+    loadIngredients
   };
 }

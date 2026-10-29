@@ -1,8 +1,20 @@
 import { requestJson } from './apiClient';
-import { getAnalyticsConsent } from '../utils/analyticsConsent';
+import {
+  getAnalyticsConsent,
+  getAnalyticsConsentGeneration,
+  subscribeToAnalyticsConsent
+} from '../utils/analyticsConsent';
 import { isBackendEnabled } from '../utils/backendConfig';
 
 let eventQueue = Promise.resolve();
+const pendingEvents = new Set();
+let unsubscribeConsent = null;
+
+function cancelPendingEvents() {
+  // A fresh approval must not wait for an old request that ignores abort.
+  eventQueue = Promise.resolve();
+  for (const cancel of pendingEvents) cancel();
+}
 
 const EVENT_PROPERTY_KEYS = Object.freeze({
   activation_completed: ['activation_path'],
@@ -110,12 +122,42 @@ export function saveProductEvent(payload) {
     return Promise.resolve(null);
   }
 
-  const request = () => requestJson('/product-events', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(buildProductEventPayload(payload))
-  }, { authMode: 'required' });
+  if (!unsubscribeConsent) {
+    unsubscribeConsent = subscribeToAnalyticsConsent(cancelPendingEvents);
+  }
+  const generation = getAnalyticsConsentGeneration();
+  const controller = new AbortController();
+  let resolveCancelled;
+  const cancelled = new Promise(resolve => { resolveCancelled = resolve; });
+  const cancel = () => {
+    resolveCancelled(null);
+    // Best effort only: abort cannot delete an event already accepted by the server.
+    controller.abort();
+  };
+  pendingEvents.add(cancel);
+
+  const request = () => {
+    if (
+      controller.signal.aborted ||
+      generation !== getAnalyticsConsentGeneration() ||
+      getAnalyticsConsent() !== 'granted'
+    ) return null;
+
+    return requestJson('/product-events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(buildProductEventPayload(payload)),
+      signal: controller.signal
+    }, { authMode: 'required' });
+  };
   const queued = eventQueue.then(request, request);
-  eventQueue = queued.catch(() => null);
-  return queued;
+  const result = Promise.race([queued, cancelled]).finally(() => {
+    pendingEvents.delete(cancel);
+    if (pendingEvents.size === 0) {
+      unsubscribeConsent?.();
+      unsubscribeConsent = null;
+    }
+  });
+  eventQueue = result.catch(() => null);
+  return result;
 }

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useUserPreferences } from '../hooks/useUserPreferences';
 
 function parseIngredients(value) {
@@ -6,12 +5,12 @@ function parseIngredients(value) {
 }
 
 function PreferenceSettingsPanel() {
-  const { error, preferences, savePreferences, saving } = useUserPreferences();
-  const [status, setStatus] = useState('');
+  const { error, preferences, savePreferences, saving, saveNotice, storageReady, reloadPreferences, scope } = useUserPreferences();
+  const disabled = saving || storageReady === false;
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setStatus('');
+    if (disabled) return;
     const formData = new FormData(event.currentTarget);
     try {
       await savePreferences({
@@ -19,9 +18,9 @@ function PreferenceSettingsPanel() {
         preferredIngredients: parseIngredients(formData.get('preferredIngredients')),
         dislikedIngredients: parseIngredients(formData.get('dislikedIngredients'))
       });
-      setStatus('취향 설정을 저장했습니다.');
     } catch {
-      setStatus('');
+      // The hook distinguishes local failure, remote failure and acknowledged
+      // remote success whose cache write failed. Never replace that outcome.
     }
   };
 
@@ -33,24 +32,25 @@ function PreferenceSettingsPanel() {
         <p className="mt-2 text-sm leading-6 muted">쉼표로 구분해 입력하면 추천 순서에 가볍게 반영합니다.</p>
       </div>
       <form
-        key={`${preferences.preferredIngredients?.join('|')}::${preferences.dislikedIngredients?.join('|')}`}
+        key={`${scope}:${preferences.preferredIngredients?.join('|')}::${preferences.dislikedIngredients?.join('|')}`}
         className="space-y-4"
         onSubmit={handleSubmit}
       >
         <div className="grid gap-4 md:grid-cols-2">
           <label className="text-sm font-semibold text-slate-900">
             선호 재료
-            <input className="input mt-2 w-full" defaultValue={(preferences.preferredIngredients || []).join(', ')} maxLength={500} name="preferredIngredients" />
+            <input className="input mt-2 w-full" disabled={disabled} defaultValue={(preferences.preferredIngredients || []).join(', ')} maxLength={500} name="preferredIngredients" />
           </label>
           <label className="text-sm font-semibold text-slate-900">
             비선호 재료
-            <input className="input mt-2 w-full" defaultValue={(preferences.dislikedIngredients || []).join(', ')} maxLength={500} name="dislikedIngredients" />
+            <input className="input mt-2 w-full" disabled={disabled} defaultValue={(preferences.dislikedIngredients || []).join(', ')} maxLength={500} name="dislikedIngredients" />
           </label>
           <label className="text-sm font-semibold text-slate-900">
             매운맛
             <select
               className="input mt-2 w-full"
-              onChange={(event) => savePreferences({ ...preferences, spiceLevel: event.target.value }).catch(() => {})}
+              disabled={disabled}
+              onChange={(event) => savePreferences({ ...preferences, spiceLevel: event.target.value }, { changedField: 'spiceLevel' }).catch(() => {})}
               value={preferences.spiceLevel}
             >
               <option value="mild">순한맛</option>
@@ -62,7 +62,8 @@ function PreferenceSettingsPanel() {
             조리 여유
             <select
               className="input mt-2 w-full"
-              onChange={(event) => savePreferences({ ...preferences, cookingTimePreference: event.target.value }).catch(() => {})}
+              disabled={disabled}
+              onChange={(event) => savePreferences({ ...preferences, cookingTimePreference: event.target.value }, { changedField: 'cookingTimePreference' }).catch(() => {})}
               value={preferences.cookingTimePreference}
             >
               <option value="quick">빠르게</option>
@@ -71,11 +72,12 @@ function PreferenceSettingsPanel() {
             </select>
           </label>
         </div>
-        {status ? <p className="text-sm font-medium text-emerald-700">{status}</p> : null}
-        {error ? <p className="text-sm font-medium text-rose-700">{error}</p> : null}
-        <button className="btn-primary" disabled={saving} type="submit">
+        {saveNotice ? <p role="status" className="text-sm font-medium text-emerald-700">{saveNotice}</p> : null}
+        {error ? <p role="alert" className="text-sm font-medium text-rose-700">{error}</p> : null}
+        <button className="btn-primary" disabled={disabled} type="submit">
           {saving ? '저장 중...' : '취향 저장'}
         </button>
+        {error ? <button className="btn-secondary ml-2" disabled={saving} type="button" onClick={reloadPreferences}>취향 설정 다시 확인</button> : null}
       </form>
     </section>
   );

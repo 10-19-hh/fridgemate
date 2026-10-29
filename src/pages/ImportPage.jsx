@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { saveImportCorrectionsRemote } from '../api/importCorrectionsApi';
 import PageHeader from '../components/PageHeader';
+import ImportCorrectionRecoveryPanel from '../components/import/ImportCorrectionRecoveryPanel';
 import OcrResultPanel from '../components/import/OcrResultPanel';
 import ParsedItemEditor from '../components/import/ParsedItemEditor';
 import UploadBox from '../components/import/UploadBox';
+import { prepareIngredientImport } from '../features/import/ingredientImportRepository';
 import {
   annotateDuplicateImportItems,
   setImportItemsSelected,
@@ -39,10 +41,9 @@ function ImportEmptyPanel({ title, description }) {
   );
 }
 
-function ImportPage() {
+function ImportSession({ isAuthenticated, storageScope }) {
   const navigate = useNavigate();
-  const { ingredients, addIngredients, removeIngredient } = useIngredients();
-  const { isAuthenticated, storageScope } = useAuth();
+  const { ingredients, importIngredients, loadIngredients, loading: inventoryLoading, error: inventoryError } = useIngredients();
   const { trackEvent } = useAnalytics();
   const [imageFile, setImageFile] = useState(null);
   const [ocrResult, setOcrResult] = useState(null);
@@ -50,42 +51,85 @@ function ImportPage() {
   const [status, setStatus] = useState('idle');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
-  const [items, setItems] = useState([]);
+  const [reviewItems, setItems] = useState([]);
   const [importMessage, setImportMessage] = useState('');
+  const [importSaved, setImportSaved] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [needsImportConfirmation, setNeedsImportConfirmation] = useState(false);
+  const mounted = useRef(false);
+  const generation = useRef(0);
+  const recognizing = useRef(null);
+  const saving = useRef(false);
+  const saved = useRef(false);
+  const prepared = useRef(null);
+  const confirmationPending = useRef(false);
+  const replacements = useRef(new Map());
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; generation.current += 1; };
+  }, []);
 
   const rawText = ocrResult?.text || '';
   const parseResult = useMemo(() => parseImportText(ocrResult), [ocrResult]);
 
-  useEffect(() => {
-    setItems(
-      annotateDuplicateImportItems(
-        applyImportCorrections(parseResult.candidates, storageScope),
-        ingredients
-      )
-    );
-  }, [ingredients, parseResult, storageScope]);
+  // Inventory updates (including a failed save rollback) must not reset manual review edits.
+  const items = useMemo(() => annotateDuplicateImportItems(reviewItems, ingredients).map(item => (
+    item.replaceExisting ? { ...item, duplicateExistingItems: replacements.current.get(item.id) || [] } : item
+  )), [reviewItems, ingredients]);
+  const busy = isSaving || isRefreshing;
+  const editingDisabled = busy || status === 'processing';
+
+  function trackSafely(name, properties) {
+    try { trackEvent(name, properties); } catch { /* Optional analytics cannot block inventory work. */ }
+  }
+
+  function canInteract() {
+    return mounted.current && !saving.current && !saved.current && recognizing.current === null;
+  }
+
+  function canEdit() {
+    return canInteract() && !confirmationPending.current;
+  }
+
+  function resetReview() {
+    prepared.current = null;
+    confirmationPending.current = false;
+    setNeedsImportConfirmation(false);
+    replacements.current.clear();
+    saved.current = false;
+    setImportSaved(false);
+    setItems([]);
+    setImportMessage('');
+  }
 
   const handleFileChange = async (event) => {
+    if (!mounted.current || saving.current) return;
     const fileInput = event.currentTarget;
     const nextFile = event.target.files?.[0];
+    const version = ++generation.current;
+    recognizing.current = null;
 
     setImageFile(null);
     setOcrResult(null);
-    setItems([]);
+    resetReview();
     setError('');
     setStatus('idle');
-    setImportMessage('');
+    setShowRawText(false);
 
     if (!nextFile) return;
 
     try {
       await validateOcrImageFile(nextFile);
-      trackEvent('ocr_upload_started', {
+      if (!mounted.current || generation.current !== version) return;
+      trackSafely('ocr_upload_started', {
         file_type: nextFile.type || 'unknown',
         source_screen: 'import'
       });
       setImageFile(nextFile);
     } catch (validationError) {
+      if (!mounted.current || generation.current !== version) return;
       fileInput.value = '';
       setStatus('error');
       setError(validationError.message);
@@ -93,45 +137,74 @@ function ImportPage() {
   };
 
   const runOcr = async () => {
+    if (!mounted.current || saving.current || recognizing.current !== null || confirmationPending.current) return;
     if (!imageFile) {
       setError(IMPORT_PAGE_COPY.uploadFirstError);
       setStatus('error');
       return;
     }
 
+    const version = ++generation.current;
+    recognizing.current = version;
+    resetReview();
+    setOcrResult(null);
     setError('');
-    setImportMessage('');
     setStatus('processing');
     setProgress(0);
 
     try {
       const result = await runOcrWithProvider(imageFile, {
-        onProgress: (value) => setProgress(value)
+        onProgress: (value) => {
+          if (mounted.current && generation.current === version) setProgress(value);
+        }
       });
 
+      if (!mounted.current || generation.current !== version) return;
+      const parsed = parseImportText(result);
       setOcrResult(result);
+      setItems(annotateDuplicateImportItems(applyImportCorrections(parsed.candidates, storageScope), ingredients));
       setStatus('success');
-      trackEvent('ocr_parse_completed', {
+      trackSafely('ocr_parse_completed', {
         raw_text_length: result?.text?.length || 0,
-        parsed_item_count: parseImportText(result).candidates.length,
-        template_type: parseImportText(result).template?.id || 'unknown',
+        parsed_item_count: parsed.candidates.length,
+        template_type: parsed.template?.id || 'unknown',
         confidence_bucket: 'medium'
       });
     } catch (ocrError) {
+      if (!mounted.current || generation.current !== version) return;
       setError(ocrError.message || IMPORT_PAGE_COPY.ocrFailed);
       setStatus('error');
+    } finally {
+      if (recognizing.current === version) recognizing.current = null;
     }
   };
 
   const handleItemChange = (id, field, value) => {
-    setItems((current) => annotateDuplicateImportItems(updateImportItem(current, id, { [field]: value }), ingredients));
+    if (!canEdit()) return;
+    if (field === 'replaceExisting' && (inventoryLoading || inventoryError)) return;
+    prepared.current = null;
+    const patch = { [field]: value };
+    if (field === 'replaceExisting') {
+      if (value) replacements.current.set(id, structuredClone(items.find(item => item.id === id)?.duplicateExistingItems || []));
+      else replacements.current.delete(id);
+    } else if (field === 'name' && replacements.current.has(id)) {
+      replacements.current.delete(id);
+      patch.replaceExisting = false;
+      setImportMessage('이름이 바뀌었어요. 기존 항목 교체 여부를 다시 확인해 주세요.');
+    }
+    setItems((current) => annotateDuplicateImportItems(updateImportItem(current, id, patch), ingredients));
   };
 
   const handleToggleItem = (id) => {
+    if (!canEdit()) return;
+    prepared.current = null;
     setItems((current) => toggleImportItemSelection(current, id));
   };
 
   const handleApplySuggestion = (id, suggestion) => {
+    if (!canEdit()) return;
+    prepared.current = null;
+    if (replacements.current.delete(id)) setImportMessage('이름이 바뀌었어요. 기존 항목 교체 여부를 다시 확인해 주세요.');
     setItems((current) =>
       annotateDuplicateImportItems(
         updateImportItem(current, id, {
@@ -140,6 +213,7 @@ function ImportPage() {
           normalizedName: suggestion.correctedName,
           category: suggestion.category,
           storageType: suggestion.storageType,
+          replaceExisting: false,
           learnedCorrection: true
         }),
         ingredients
@@ -147,7 +221,45 @@ function ImportPage() {
     );
   };
 
+  const handleSelectAll = (selected) => {
+    if (!canEdit()) return;
+    prepared.current = null;
+    setItems((current) => setImportItemsSelected(current, selected));
+  };
+
+  const handleRefreshInventory = async () => {
+    if (!canInteract() || inventoryLoading) return;
+    saving.current = true;
+    setIsRefreshing(true);
+    setImportMessage('');
+    const version = generation.current;
+    const current = () => mounted.current && generation.current === version;
+    try {
+      const refreshedIngredients = await loadIngredients({ force: true });
+      if (!current()) return;
+      // Matching IDs are only a hint. The original command must still pass
+      // the repository's complete replay/CAS checks before reporting success.
+      if (prepared.current && (confirmationPending.current || prepared.current.items.some(item =>
+        refreshedIngredients.some(ingredient => ingredient.id === item.id)))) {
+        confirmationPending.current = true;
+        setNeedsImportConfirmation(true);
+        setImportMessage('이전 저장 요청을 유지했어요. 저장 결과를 다시 확인해 주세요.');
+        return;
+      }
+      prepared.current = null;
+      replacements.current.clear();
+      setItems(items => items.map(item => ({ ...item, replaceExisting: false })));
+      setImportMessage('재고를 다시 확인했어요. 기존 항목 교체 여부를 다시 선택해 주세요.');
+    } catch {
+      if (current()) setImportMessage('재고를 다시 확인하지 못했어요. 후보는 유지됐어요. 다시 시도해 주세요.');
+    } finally {
+      saving.current = false;
+      if (current()) setIsRefreshing(false);
+    }
+  };
+
   const handleImport = async () => {
+    if (!canInteract() || inventoryLoading || inventoryError) return;
     const selectedRawItems = items.filter((item) => item.selected && item.name.trim());
     const selectedItems = toImportableItems(items);
 
@@ -156,33 +268,38 @@ function ImportPage() {
       return;
     }
 
+    saving.current = true;
+    setIsSaving(true);
+    setImportMessage('');
+    const version = generation.current;
+    const current = () => mounted.current && generation.current === version;
     try {
-      trackEvent('ocr_review_completed', {
+      if (!prepared.current) {
+        const replacementItems = [...new Map(selectedRawItems.filter(item => item.replaceExisting)
+          .flatMap(item => replacements.current.get(item.id) || []).map(item => [item.id, item])).values()];
+        prepared.current = prepareIngredientImport({ scope: storageScope, items: selectedItems,
+          replacements: replacementItems, syncEnabled: isBackendEnabled() && isAuthenticated,
+          now: new Date().toISOString() });
+      }
+      await importIngredients(prepared.current);
+      if (!current()) return;
+      // ACK comes first. Auxiliary failures must never offer this command again.
+      saved.current = true;
+      setImportSaved(true);
+      let learningSaved = false;
+      try { learningSaved = saveImportCorrections(selectedRawItems, storageScope); } catch { /* Best effort. */ }
+      if (current() && isBackendEnabled() && isAuthenticated) {
+        try { Promise.resolve(saveImportCorrectionsRemote(selectedRawItems)).catch(() => {}); } catch { /* Best effort. */ }
+      }
+      if (!current()) return;
+      trackSafely('ocr_review_completed', {
         parsed_item_count: items.length,
         selected_item_count: selectedItems.length,
         edited_item_count: selectedRawItems.filter((item) => item.name !== item.originalName || item.quantity !== item.originalQuantity).length,
         deleted_item_count: items.length - selectedItems.length
       });
-      saveImportCorrections(selectedRawItems, storageScope);
-      if (isBackendEnabled() && isAuthenticated) {
-        saveImportCorrectionsRemote(selectedRawItems).catch((correctionError) => {
-          console.warn('[ImportPage] Failed to save remote import corrections.', correctionError);
-        });
-      }
-      const existingIdsToRemove = [
-        ...new Set(
-          selectedRawItems
-            .filter((item) => item.replaceExisting)
-            .flatMap((item) => item.duplicateExistingItems || [])
-            .map((item) => item.id)
-            .filter(Boolean)
-        )
-      ];
-
-      await Promise.all(existingIdsToRemove.map((id) => removeIngredient(id)));
-      await addIngredients(selectedItems);
       selectedItems.forEach((item) => {
-        trackEvent('ingredient_created', {
+        trackSafely('ingredient_created', {
           creation_method: 'ocr',
           category: item.category,
           storage_type: item.storageType,
@@ -191,20 +308,27 @@ function ImportPage() {
           quantity_present: Boolean(String(item.quantity || '').trim())
         });
       });
-      trackEvent('ocr_import_saved', {
+      trackSafely('ocr_import_saved', {
         saved_item_count: selectedItems.length,
         edited_before_save_count: selectedRawItems.filter(
           (item) => item.name !== item.originalName || item.quantity !== item.originalQuantity
         ).length,
         session_first_import: true
       });
-      trackEvent('activation_completed', {
+      trackSafely('activation_completed', {
         activation_path: 'ocr_first_import'
       });
-      setImportMessage(`${selectedItems.length}\uAC1C \uD56D\uBAA9\uC744 \uAC00\uC838\uC654\uC5B4\uC694.`);
-      navigate('/ingredients');
+      if (!current()) return;
+      if (learningSaved) {
+        navigate('/ingredients');
+      } else {
+        setImportMessage(`${selectedItems.length}개 재료를 냉장고에 저장했어요. 다음번 보정 학습은 저장하지 못했어요. 냉장고에서 저장한 재료를 확인할 수 있어요.`);
+      }
     } catch (importError) {
-      setImportMessage(importError.message || IMPORT_PAGE_COPY.importFailed);
+      if (current() && !saved.current) setImportMessage(importError.message || IMPORT_PAGE_COPY.importFailed);
+    } finally {
+      saving.current = false;
+      if (current()) setIsSaving(false);
     }
   };
 
@@ -226,10 +350,30 @@ function ImportPage() {
       <UploadBox
         imageFile={imageFile}
         fileName={imageFile?.name}
-        disabled={!imageFile || status === 'processing'}
+        disabled={!imageFile || status === 'processing' || busy || needsImportConfirmation}
+        fileDisabled={busy}
         onChange={handleFileChange}
         onRunOcr={runOcr}
       />
+      <ImportCorrectionRecoveryPanel
+        key={importSaved ? 'saved' : 'review'}
+        scope={storageScope}
+        disabled={editingDisabled}
+        canReset={() => mounted.current && !saving.current && recognizing.current === null}
+      />
+
+      {isSaving ? <p aria-live="polite" className="text-sm text-brand-700">재료를 저장하고 있어요. 완료될 때까지 기다려 주세요.</p> : null}
+      {inventoryLoading ? <p className="text-sm muted">저장된 재고를 확인하고 있어요. 후보를 검토하며 기다려 주세요.</p> : null}
+      {inventoryError ? <p role="alert" className="text-sm text-red-800">저장된 재고를 확인하지 못했어요. 후보는 유지돼요. 재고 다시 확인을 눌러 주세요.</p> : null}
+      {(inventoryError || parseResult.candidates.length > 0) && !importSaved ? (
+        <button type="button" className="btn-secondary" disabled={editingDisabled || inventoryLoading} onClick={handleRefreshInventory}>재고 다시 확인</button>
+      ) : null}
+      {needsImportConfirmation && !importSaved ? (
+        <section className="soft-panel space-y-2">
+          <p className="text-sm">이전 요청의 항목이 재고에 보여요. 저장 완료 여부를 같은 요청으로 다시 확인해 주세요. 확인 전에는 후보를 수정할 수 없어요. 새 사진을 선택하면 새 검토를 시작해요.</p>
+          <button type="button" className="btn-primary" disabled={editingDisabled || inventoryLoading || Boolean(inventoryError)} onClick={handleImport}>이전 저장 결과 다시 확인</button>
+        </section>
+      ) : null}
 
       {/*
         텍스트 붙여넣기 분석은 잠시 비활성화.
@@ -270,7 +414,7 @@ function ImportPage() {
           <span className="badge bg-slate-100 text-slate-700">{`\uD15C\uD50C\uB9BF ${parseResult.template?.id || 'unknown'}`}</span>
           <span className="badge bg-white text-slate-500">{`source ${parseResult.sourceType || 'unknown'} ${Math.round((parseResult.sourceConfidence || 0) * 100)}%`}</span>
           {importMessage ? (
-            <span className="rounded-2xl border border-brand-100/80 bg-brand-50/70 px-3 py-2 text-sm font-medium text-brand-700 xl:justify-self-end">
+            <span role="status" aria-label="가져오기 결과" className="rounded-2xl border border-brand-100/80 bg-brand-50/70 px-3 py-2 text-sm font-medium text-brand-700 xl:justify-self-end">
               {importMessage}
             </span>
           ) : null}
@@ -289,19 +433,27 @@ function ImportPage() {
         </section>
       ) : null}
 
-      {parseResult.candidates.length ? (
+      {parseResult.candidates.length > 0 && !importSaved ? (
         <ParsedItemEditor
           items={items}
+          disabled={editingDisabled || needsImportConfirmation}
+          importDisabled={inventoryLoading || Boolean(inventoryError)}
+          replacementDisabled={inventoryLoading || Boolean(inventoryError)}
           onItemChange={handleItemChange}
           onToggleItem={handleToggleItem}
-          onSelectAll={() => setItems((current) => setImportItemsSelected(current, true))}
-          onDeselectAll={() => setItems((current) => setImportItemsSelected(current, false))}
+          onSelectAll={() => handleSelectAll(true)}
+          onDeselectAll={() => handleSelectAll(false)}
           onApplySuggestion={handleApplySuggestion}
           onImport={handleImport}
         />
       ) : null}
     </div>
   );
+}
+
+function ImportPage() {
+  const { storageScope, isAuthenticated } = useAuth();
+  return <ImportSession key={storageScope} storageScope={storageScope} isAuthenticated={isAuthenticated} />;
 }
 
 export default ImportPage;

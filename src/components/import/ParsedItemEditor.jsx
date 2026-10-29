@@ -12,11 +12,12 @@ function ConfidenceBadge({ confidence }) {
   return <span className="badge bg-rose-100 text-rose-700">{'\uD655\uC778 \uD544\uC694'}</span>;
 }
 
-function ParsedItemEditor({ items, onItemChange, onToggleItem, onSelectAll, onDeselectAll, onApplySuggestion, onImport }) {
+function ParsedItemEditor({ items, disabled = false, importDisabled = false, replacementDisabled = false, onItemChange, onToggleItem, onSelectAll, onDeselectAll, onApplySuggestion, onImport }) {
   const selectedCount = items.filter((item) => item.selected).length;
 
   return (
     <section className="card space-y-3.5">
+      <fieldset disabled={disabled} className="min-w-0 space-y-3.5" aria-busy={disabled}>
       <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="kicker">{'3. \uD6C4\uBCF4 \uAC80\uD1A0'}</p>
@@ -45,13 +46,13 @@ function ParsedItemEditor({ items, onItemChange, onToggleItem, onSelectAll, onDe
       </div>
 
       <div className="space-y-2.5">
-        {items.map((item) => (
-          <article key={item.id} className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm sm:p-3">
+        {items.map((item, index) => (
+          <article key={item.id} aria-label={`후보 ${index + 1}: ${item.name || '이름 미확인'}`} className="rounded-lg border border-slate-200 bg-white p-2.5 shadow-sm sm:p-3">
             <div className="grid gap-2.5 xl:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)]">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-start justify-between gap-2.5">
                   <label className="flex min-w-0 items-center gap-2.5 text-sm font-medium text-slate-800">
-                    <input type="checkbox" checked={item.selected} onChange={() => onToggleItem(item.id)} />
+                    <input type="checkbox" aria-label={`이 항목 가져오기: 후보 ${index + 1} ${item.name || '이름 미확인'}`} checked={item.selected} onChange={() => onToggleItem(item.id)} />
                     <span className="whitespace-nowrap">{'\uC774 \uD56D\uBAA9 \uAC00\uC838\uC624\uAE30'}</span>
                   </label>
                   <div className="flex flex-wrap gap-1.5">
@@ -71,13 +72,16 @@ function ParsedItemEditor({ items, onItemChange, onToggleItem, onSelectAll, onDe
                   </div>
                 </div>
                 {item.duplicateExistingItems?.length ? (
-                  <label className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                  <label className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
                     <input
                       type="checkbox"
+                      aria-label={`기존 ${item.duplicateExistingItems.length}개 항목 삭제 후 가져오기: 후보 ${index + 1} ${item.name || '이름 미확인'}`}
+                      className="mt-0.5 w-auto shrink-0"
+                      disabled={replacementDisabled}
                       checked={Boolean(item.replaceExisting)}
                       onChange={(event) => onItemChange(item.id, 'replaceExisting', event.target.checked)}
                     />
-                    <span className="truncate">{`\uAE30\uC874 ${item.duplicateExistingItems.length}\uAC1C \uD56D\uBAA9 \uC0AD\uC81C \uD6C4 \uAC00\uC838\uC624\uAE30`}</span>
+                    <span className="min-w-0 whitespace-normal break-words">{`\uAE30\uC874 ${item.duplicateExistingItems.length}\uAC1C \uD56D\uBAA9 \uC0AD\uC81C \uD6C4 \uAC00\uC838\uC624\uAE30`}</span>
                   </label>
                 ) : null}
                 {item.correctionSuggestions?.length ? (
@@ -213,10 +217,11 @@ function ParsedItemEditor({ items, onItemChange, onToggleItem, onSelectAll, onDe
       </div>
 
       <div className="flex flex-wrap gap-2.5">
-        <button type="button" className="btn-primary" onClick={onImport}>
+        <button type="button" className="btn-primary" disabled={importDisabled} onClick={onImport}>
           {'\uC120\uD0DD \uD56D\uBAA9 \uC800\uC7A5'}
         </button>
       </div>
+      </fieldset>
     </section>
   );
 }

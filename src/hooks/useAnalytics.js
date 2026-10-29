@@ -9,8 +9,9 @@ import {
   recordAnalyticsEvent
 } from '../utils/analytics';
 import {
-  ANALYTICS_CONSENT_UPDATED_EVENT,
-  getAnalyticsConsent
+  getAnalyticsConsent,
+  getAnalyticsConsentGeneration,
+  subscribeToAnalyticsConsent
 } from '../utils/analyticsConsent';
 
 const AnalyticsContext = createContext({
@@ -24,8 +25,7 @@ export function AnalyticsProvider({ children }) {
 
   useEffect(() => {
     const handleConsentUpdate = () => setAnalyticsConsentState(getAnalyticsConsent());
-    window.addEventListener(ANALYTICS_CONSENT_UPDATED_EVENT, handleConsentUpdate);
-    return () => window.removeEventListener(ANALYTICS_CONSENT_UPDATED_EVENT, handleConsentUpdate);
+    return subscribeToAnalyticsConsent(handleConsentUpdate);
   }, []);
 
   const trackEvent = useCallback(
@@ -56,12 +56,13 @@ export function AnalyticsProvider({ children }) {
     }
 
     let isMounted = true;
+    const generation = getAnalyticsConsentGeneration();
     markSessionStartedTracked();
 
     ingredientCache
       .getAll({ scope: storageScope })
       .then((items) => {
-        if (!isMounted) {
+        if (!isMounted || generation !== getAnalyticsConsentGeneration()) {
           return;
         }
 
@@ -72,7 +73,7 @@ export function AnalyticsProvider({ children }) {
         });
       })
       .catch(() => {
-        if (!isMounted) {
+        if (!isMounted || generation !== getAnalyticsConsentGeneration()) {
           return;
         }
 

@@ -155,3 +155,117 @@ for (const viewport of VIEWPORTS) {
     });
   });
 }
+
+test('ACQ-02 keeps displayed guest inventory and meal preferences out of public metadata and HTML', async ({ page }) => {
+  const ingredient = createIngredient('acq02-private-inventory', {
+    name: 'ACQ02_PRIVATE_INGREDIENT', quantity: '7319g', memo: 'ACQ02_PRIVATE_MEMO',
+    purchaseDate: '2031-04-17', expiryDate: '2031-05-23'
+  });
+  const excluded = 'ACQ02_PRIVATE_EXCLUSION';
+  const privateValues = [ingredient.id, ingredient.name, ingredient.quantity, ingredient.memo,
+    ingredient.purchaseDate, ingredient.expiryDate, excluded];
+  const origin = 'https://xn--wh1bs8l5xa003adme.com';
+  const recipePath = '/recipes/32-순두부-사과-소스-오이무침';
+  await page.clock.setFixedTime(new Date('2026-10-12T08:00:00.000Z'));
+  await page.route('https://www.foodsafetykorea.go.kr/uploadimg/**', route => route.fulfill({
+    status: 200, contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1kAAAAASUVORK5CYII=', 'base64')
+  }));
+  await seedBrowserState(page, { ingredients: [ingredient] });
+
+  // Positive controls: these values must really be loaded, not merely seeded
+  // into an unused store, before their absence from public output can pass.
+  await gotoAndWait(page, `/ingredients/${ingredient.id}/edit`);
+  await expect(page.getByLabel('이름 *', { exact: true })).toHaveValue(ingredient.name);
+  await expect(page.getByLabel('수량 *', { exact: true })).toHaveValue(ingredient.quantity);
+  await expect(page.getByRole('textbox', { name: '메모 (선택)', exact: true })).toHaveValue(ingredient.memo);
+  await expect(page.getByLabel('구매일', { exact: true })).toHaveValue(ingredient.purchaseDate);
+  await expect(page.getByLabel('유통기한', { exact: true })).toHaveValue(ingredient.expiryDate);
+
+  async function expectPrivateHead() {
+    await expect(page.locator('head meta[name="robots"]')).toHaveAttribute('content', /^noindex(?:,|$)/);
+    await expect(page.locator('head script[type="application/ld+json"]')).toHaveCount(0);
+  }
+  await expectPrivateHead();
+
+  // Persist the preference fixture through the real guest form and repository;
+  // no hand-written meal-plan record or development-only module import is used.
+  await page.getByRole('link', { name: '주간 식단', exact: true }).click();
+  await expect(page.getByRole('button', { name: '한 주 식단 만들기', exact: true })).toBeEnabled();
+  await page.getByRole('combobox', { name: '식사 인원', exact: true }).selectOption('2');
+  await page.getByRole('textbox', { name: '피하고 싶은 재료', exact: true }).fill(excluded);
+  for (const day of ['화', '수', '목', '금', '토', '일']) {
+    await page.getByLabel(`${day}요일 저녁`, { exact: true }).uncheck();
+  }
+  await page.getByRole('button', { name: '한 주 식단 만들기', exact: true }).click();
+  await expect(page.getByRole('button', { name: '고정하지 않은 메뉴 다시 추천', exact: true })).toBeEnabled();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('button', { name: '고정하지 않은 메뉴 다시 추천', exact: true })).toBeEnabled();
+  const settings = page.locator('.meal-plan-settings details');
+  if (!(await settings.evaluate(element => element.open))) await settings.locator('summary').click();
+  await expect(page.getByRole('textbox', { name: '피하고 싶은 재료', exact: true })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: '피하고 싶은 재료', exact: true })).toHaveValue(excluded);
+  await expect(page.getByRole('combobox', { name: '식사 인원', exact: true })).toHaveValue('2');
+  await expect(page.getByLabel('월요일 저녁', { exact: true })).toBeChecked();
+  await expect(page.getByLabel('화요일 저녁', { exact: true })).not.toBeChecked();
+
+  const homeResponse = await page.request.get('/');
+  expect(homeResponse.status()).toBe(200);
+  const homeSource = await homeResponse.text();
+  const developmentServer = homeSource.includes('/@vite/client');
+
+  async function expectPublicOutput(path, schemaType, generatedPath) {
+    const canonical = new URL(path, origin).href;
+    await expect(page.locator('head meta[name="robots"]')).toHaveAttribute('content', 'index,follow');
+    await expect(page.locator('head meta[property="og:url"]')).toHaveAttribute('content', canonical);
+    await expect(page.locator('head link[rel="canonical"]')).toHaveAttribute('href', canonical);
+    await expect.poll(() => page.locator('head script[type="application/ld+json"]').evaluateAll(nodes =>
+      nodes.map(node => JSON.parse(node.textContent)['@type']))).toContain(schemaType);
+    const title = await page.title();
+    expect(title).toContain('오늘뭐먹지');
+    await expect(page.locator('head meta[property="og:title"]')).toHaveAttribute('content', title);
+    const description = await page.locator('head meta[name="description"]').getAttribute('content');
+    expect(description?.trim()).toBeTruthy();
+    await expect(page.locator('head meta[property="og:description"]')).toHaveAttribute('content', description);
+    const head = await page.locator('head').innerHTML();
+
+    // Vite preview does not implement hosting rewrites. Inspect the generated
+    // public document explicitly there; development serves its real empty shell.
+    // Neither path is page.content(), which includes private hydrated UI.
+    const response = await page.request.get(encodeURI(developmentServer ? path : generatedPath));
+    expect(response.status()).toBe(200);
+    expect(response.headers()['content-type']).toContain('text/html');
+    const source = await response.text();
+    expect(source).toContain('<title>');
+    expect(source).toContain('오늘뭐먹지');
+    if (developmentServer) {
+      expect(source).toContain('/@vite/client');
+      expect(source).toContain('<div id="root"></div>');
+    } else {
+      expect(source).toContain(`href="${canonical}"`);
+      expect(source).toContain(`<title>${title}</title>`);
+      expect(source).toContain('<!--seo-prerender-start-->');
+      expect(source).toMatch(/<h1(?:\s|>)/);
+      expect(source).toContain(`"@type":"${schemaType}"`);
+    }
+    for (const value of privateValues) {
+      expect(head).not.toContain(value);
+      expect(source).not.toContain(value);
+    }
+  }
+
+  await page.getByRole('link', { name: '홈', exact: true }).click();
+  await expect(page.getByText(ingredient.name, { exact: true })).toBeVisible();
+  await expectPublicOutput('/', 'WebSite', '/');
+  // The same SPA must remove public schema on a private route and restore the
+  // correct public schema afterward, without incorporating the loaded settings.
+  await page.getByRole('link', { name: '주간 식단', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '이번 주 저녁, 미리 골라두세요' })).toBeVisible();
+  await expectPrivateHead();
+  await page.getByRole('link', { name: '서비스 소개', exact: true }).click();
+  await expectPublicOutput('/about', 'AboutPage', '/_seo/about.html');
+  await gotoAndWait(page, recipePath);
+  await expect(page.getByRole('heading', { level: 1, name: '순두부 사과 소스 오이무침' })).toBeVisible();
+  await expectPublicOutput(recipePath, 'Recipe', `/_seo${recipePath}.html`);
+  await expectGuestStorage(page, [ingredient]);
+});

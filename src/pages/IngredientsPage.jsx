@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 import EmptyState from '../components/EmptyState';
 import IngredientFilters from '../components/IngredientFilters';
 import IngredientList from '../components/IngredientList';
+import InventoryReadError from '../components/InventoryReadError';
+import InventoryQuantityReview from '../components/InventoryQuantityReview';
 import PageHeader from '../components/PageHeader';
 import ShoppingListPanel from '../components/ShoppingListPanel';
+import ShoppingNotesPanel from '../components/ShoppingNotesPanel';
 import {
   defaultIngredientFilters,
   filterIngredients,
@@ -12,7 +15,9 @@ import {
   getDuplicateIngredientCleanupPlan
 } from '../features/ingredients/ingredientSelectors';
 import { useAnalytics } from '../hooks/useAnalytics';
+import { useAuth } from '../hooks/useAuth';
 import { useIngredients } from '../hooks/useIngredients';
+import { getInventorySourceToken } from '../features/mealPlans/inventoryQuantityDomain';
 import { getDaysToExpiryBucket } from '../utils/analytics';
 import { isOcrEnabled } from '../utils/backendConfig';
 import { ingredientCategories, storageTypes } from '../utils/ingredientOptions';
@@ -27,7 +32,8 @@ function getTodayDateString() {
 }
 
 function IngredientsPage() {
-  const { ingredients, loading, error, removeIngredient, updateIngredient } = useIngredients();
+  const { ingredients, loading, error, readError, removeIngredient, updateIngredient, loadIngredients } = useIngredients();
+  const { storageScope, loading: authLoading } = useAuth();
   const { trackEvent } = useAnalytics();
   const ocrEnabled = isOcrEnabled();
   const [filters, setFilters] = useState(defaultIngredientFilters);
@@ -36,6 +42,8 @@ function IngredientsPage() {
   const shoppingListItems = useMemo(() => getConsumedIngredients(ingredients), [ingredients]);
   const activeIngredientCount = useMemo(() => ingredients.filter((ingredient) => !ingredient.consumed).length, [ingredients]);
   const duplicateCleanupPlan = useMemo(() => getDuplicateIngredientCleanupPlan(ingredients), [ingredients]);
+  const quantityResetKey = useMemo(() => JSON.stringify(ingredients.map(getInventorySourceToken)), [ingredients]);
+  const refreshAfterReceipt = useCallback(() => loadIngredients({ force: true }), [loadIngredients]);
 
   const handleFilterChange = useCallback((field, value) => {
     setFilters((current) => ({ ...current, [field]: value }));
@@ -79,13 +87,8 @@ function IngredientsPage() {
   );
 
   const handleSaveShoppingListDetails = useCallback(
-    async (ingredient) => {
-      try {
-        await updateIngredient(ingredient);
-      } catch {
-        // Error state is surfaced from the hook.
-      }
-    },
+    // The panel needs the rejection to retain its draft and show the failed save.
+    (ingredient) => updateIngredient(ingredient),
     [updateIngredient]
   );
 
@@ -158,7 +161,7 @@ function IngredientsPage() {
         onChange={handleFilterChange}
       />
 
-      <section className="glass-card flex flex-col gap-3 px-4 py-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
+      {!readError ? <section className="glass-card flex flex-col gap-3 px-4 py-3 text-sm text-slate-700 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           <span className="summary-chip">{`\uBCF4\uC720 \uC911 ${activeIngredientCount}\uAC1C`}</span>
           <span className="summary-chip">{`\uAC80\uC0C9 \uACB0\uACFC ${filteredIngredients.length}\uAC1C`}</span>
@@ -175,9 +178,9 @@ function IngredientsPage() {
           ) : null}
           <p className="text-xs muted">{'\uD575\uC2EC \uC561\uC158\uC740 \uC18C\uBE44 \uCC98\uB9AC, \uBCF4\uC870 \uC561\uC158\uC740 \uC218\uC815 \uC911\uC2EC\uC73C\uB85C \uBC30\uCE58\uD588\uC5B4\uC694.'}</p>
         </div>
-      </section>
+      </section> : null}
 
-      {duplicateCleanupPlan.removeCount ? (
+      {!readError && duplicateCleanupPlan.removeCount ? (
         <section className="soft-panel space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -196,7 +199,11 @@ function IngredientsPage() {
         </section>
       ) : null}
 
-      {!loading ? (
+      <InventoryQuantityReview scope={storageScope} resetKey={quantityResetKey} disabled={loading || authLoading || Boolean(readError)} />
+
+      <ShoppingNotesPanel scope={storageScope} resetKey={quantityResetKey} disabled={loading || authLoading || Boolean(readError)} onInventoryApplied={refreshAfterReceipt} />
+
+      {!loading && !readError ? (
         <ShoppingListPanel
           items={shoppingListItems}
           onDelete={handleDelete}
@@ -207,9 +214,10 @@ function IngredientsPage() {
       ) : null}
 
       {loading ? <div className="card text-sm muted">{'\uC7AC\uB8CC\uB97C \uBD88\uB7EC\uC624\uB294 \uC911\uC785\uB2C8\uB2E4...'}</div> : null}
-      {error ? <div className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">{error}</div> : null}
+      {readError ? <InventoryReadError loading={loading} onRetry={loadIngredients} /> : null}
+      {error && !readError && !loading ? <div role="alert" className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">{error}</div> : null}
 
-      {!loading && !filteredIngredients.length ? (
+      {!loading && !readError && !filteredIngredients.length ? (
         <EmptyState
           icon="🥕"
           title={'\uD604\uC7AC \uC870\uAC74\uC5D0 \uB9DE\uB294 \uC7AC\uB8CC\uAC00 \uC5C6\uC5B4\uC694'}
@@ -219,7 +227,7 @@ function IngredientsPage() {
         />
       ) : null}
 
-      <IngredientList ingredients={filteredIngredients} onDelete={handleDelete} onToggleConsumed={handleToggleConsumed} />
+      {!readError ? <IngredientList ingredients={filteredIngredients} onDelete={handleDelete} onToggleConsumed={handleToggleConsumed} /> : null}
     </div>
   );
 }

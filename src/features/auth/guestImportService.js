@@ -6,6 +6,9 @@ import {
   setGuestImportDecision
 } from './authStorage';
 import { createUnavailableAuthError } from './authSessionService';
+import {
+  assertAuthActionOwner, captureAuthContext, createAuthContextChangedError, isAuthContextCurrent
+} from './authSessionContext';
 
 export async function inspectGuestImportPrompt({ isAuthenticated, user, setGuestImportPrompt, defaultGuestImportPrompt }) {
   if (!isAuthenticated) {
@@ -33,8 +36,10 @@ export async function importGuestIngredientsForUser({
   user,
   setGuestImportPrompt,
   setError,
+  ownerContext = captureAuthContext(),
   defaultGuestImportPrompt
 }) {
+  assertAuthActionOwner(ownerContext);
   if (!backendEnabled || !user?.id) {
     throw createUnavailableAuthError();
   }
@@ -47,6 +52,7 @@ export async function importGuestIngredientsForUser({
 
   try {
     const guestIngredients = await indexedDb.getAllIngredients({ scope: GUEST_STORAGE_SCOPE });
+    assertAuthActionOwner(ownerContext);
 
     if (!guestIngredients.length) {
       setGuestImportDecision(user.id, 'imported');
@@ -57,22 +63,27 @@ export async function importGuestIngredientsForUser({
     const importedIngredients = guestIngredients.map(({ lastSyncedAt, syncState, ...ingredient }) => ingredient);
 
     await indexedDb.replaceIngredients(importedIngredients, { scope: buildUserStorageScope(user.id) });
+    assertAuthActionOwner(ownerContext);
 
     setGuestImportDecision(user.id, 'imported');
     setGuestImportPrompt(defaultGuestImportPrompt);
     return importedIngredients;
   } catch (nextError) {
+    if (!isAuthContextCurrent(ownerContext)) throw createAuthContextChangedError();
     setError(nextError.message || 'Guest ingredients could not be imported.');
     throw nextError;
   } finally {
-    setGuestImportPrompt((current) => ({
-      ...current,
-      loading: false
-    }));
+    if (isAuthContextCurrent(ownerContext)) {
+      setGuestImportPrompt((current) => ({
+        ...current,
+        loading: false
+      }));
+    }
   }
 }
 
-export function dismissGuestImportPrompt({ user, setGuestImportPrompt, defaultGuestImportPrompt }) {
+export function dismissGuestImportPrompt({ user, setGuestImportPrompt, defaultGuestImportPrompt, ownerContext = captureAuthContext() }) {
+  assertAuthActionOwner(ownerContext);
   if (!user?.id) {
     return;
   }

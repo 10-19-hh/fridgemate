@@ -1,0 +1,650 @@
+[
+  {
+    "sourceSnapshot": {
+      "externalId": "28",
+      "name": "새우 두부 계란찜",
+      "ingredientsText": "새우두부계란찜\n연두부 75g(3/4모), 칵테일새우 20g(5마리), 달걀 30g(1/2개), 생크림 13g(1큰술), 설탕 5g(1작은술), 무염버터 5g(1작은술)\n고명\n시금치 10g(3줄기)",
+      "steps": [
+        {
+          "order": 1,
+          "text": "1. 손질된 새우를 끓는 물에 데쳐 건진다."
+        },
+        {
+          "order": 2,
+          "text": "2. 연두부, 달걀, 생크림, 설탕에 녹인 무염버터를 믹서에 넣고 간 뒤 새우(1)를 함께 섞어 그릇에 담는다."
+        },
+        {
+          "order": 3,
+          "text": "3. 시금치를 잘게 다져 혼합물 그릇(2)에 뿌리고 찜기에 넣고 중간 불에서 10분 정도 찐다."
+        }
+      ],
+      "source": "식품의약품안전처 조리식품의 레시피 DB",
+      "sourceUrl": "https://www.foodsafetykorea.go.kr/api/openApiInfo.do?menu_grp=MENU_GRP31&menu_no=661&show_cnt=10&start_idx=1&svc_no=COOKRCP01"
+    },
+    "sourceSha256": "367b0672625eaca9510db3285fad8541799418324f29a9878684e3464d80754f",
+    "reviewVersion": "mfds-quantity-2026-09-15-v1",
+    "reviewedAt": "2026-09-15",
+    "reviewMethod": "API 재료·조리 단계와 식약처 책자 페이지를 직접 대조. 직접 조리·전문가 검수가 아님.",
+    "book": {
+      "title": "우리 몸이 원하는 삼삼한 밥상",
+      "url": "https://www.foodsafetykorea.go.kr/upload/20170417/20170417053825_1492418305214.pdf",
+      "sha256": "a0c70b598bbc86fc097eee604552e52838c4dea831fd8536af45d0d2f8396614",
+      "pdfPage": 43,
+      "printedPages": [
+        84,
+        85
+      ]
+    },
+    "servings": 1,
+    "servingsEvidence": "PDF 43 / 책자 84–85쪽: 재료준비(1인분)",
+    "comparisonNote": "책자 3단계와 API 3단계 대조. 데치는 물의 양은 미기재.",
+    "ingredients": [
+      {
+        "id": "mfds:28:custard:tofu",
+        "rawName": "연두부",
+        "rawAmount": "75g(3/4모)",
+        "amount": 75,
+        "unit": "g",
+        "ingredientKey": "food:연두부",
+        "preparationState": "as-sold",
+        "purpose": "새우두부계란찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "연두부 75g(3/4모)"
+        }
+      },
+      {
+        "id": "mfds:28:custard:shrimp",
+        "rawName": "칵테일새우",
+        "rawAmount": "20g(5마리)",
+        "amount": 20,
+        "unit": "g",
+        "ingredientKey": "food:칵테일새우",
+        "preparationState": "as-sold",
+        "purpose": "새우두부계란찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "칵테일새우 20g(5마리)"
+        }
+      },
+      {
+        "id": "mfds:28:custard:egg",
+        "rawName": "달걀",
+        "rawAmount": "30g(1/2개)",
+        "amount": 30,
+        "unit": "g",
+        "ingredientKey": "food:달걀",
+        "preparationState": "raw",
+        "purpose": "새우두부계란찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "달걀 30g(1/2개)"
+        }
+      },
+      {
+        "id": "mfds:28:custard:cream",
+        "rawName": "생크림",
+        "rawAmount": "13g(1큰술)",
+        "amount": 13,
+        "unit": "g",
+        "ingredientKey": "food:생크림",
+        "preparationState": "as-sold",
+        "purpose": "새우두부계란찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "생크림 13g(1큰술)"
+        }
+      },
+      {
+        "id": "mfds:28:custard:sugar",
+        "rawName": "설탕",
+        "rawAmount": "5g(1작은술)",
+        "amount": 5,
+        "unit": "g",
+        "ingredientKey": "food:설탕",
+        "preparationState": "as-sold",
+        "purpose": "새우두부계란찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "설탕 5g(1작은술)"
+        }
+      },
+      {
+        "id": "mfds:28:custard:butter",
+        "rawName": "무염버터",
+        "rawAmount": "5g(1작은술)",
+        "amount": 5,
+        "unit": "g",
+        "ingredientKey": "food:무염버터",
+        "preparationState": "as-sold",
+        "purpose": "새우두부계란찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "무염버터 5g(1작은술)"
+        }
+      },
+      {
+        "id": "mfds:28:garnish:spinach",
+        "rawName": "시금치",
+        "rawAmount": "10g(3줄기)",
+        "amount": 10,
+        "unit": "g",
+        "ingredientKey": "food:시금치",
+        "preparationState": "raw",
+        "purpose": "고명",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "시금치 10g(3줄기)"
+        }
+      }
+    ],
+    "processInputs": [
+      {
+        "name": "데치는 물",
+        "amount": null,
+        "unit": null,
+        "quantityStatus": "unverified",
+        "purpose": "데치기",
+        "sourceLocation": {
+          "kind": "step",
+          "order": 1,
+          "text": "끓는 물"
+        }
+      }
+    ]
+  },
+  {
+    "sourceSnapshot": {
+      "externalId": "29",
+      "name": "부추 콩가루 찜",
+      "ingredientsText": "[1인분]조선부추 50g, 날콩가루 7g(1⅓작은술)\n·양념장 : 저염간장 3g(2/3작은술), 다진 대파 5g(1작은술), 다진 마늘 2g(1/2쪽), 고춧가루 2g(1/3작은술), 요리당 2g(1/3작은술), 참기름 2g(1/3작은술), 참깨 약간",
+      "steps": [
+        {
+          "order": 1,
+          "text": "1. 부추는 깨끗이 씻어 물기를 제거하고, 5cm 길이로 썰고 부추에 날콩가루를 넣고 고루 섞이도록 버무린다."
+        },
+        {
+          "order": 2,
+          "text": "2. 찜기에 면보를 깔고 부추를 넣은 후 김이 오르게 쪄서 파랗게 익힌다."
+        },
+        {
+          "order": 3,
+          "text": "3. 저염간장에 다진 대파, 다진 마늘, 고춧가루, 요리당 , 참기름, 참깨를 섞어 양념장을 만들고 찐 부추는 그릇에 담아낸다."
+        }
+      ],
+      "source": "식품의약품안전처 조리식품의 레시피 DB",
+      "sourceUrl": "https://www.foodsafetykorea.go.kr/api/openApiInfo.do?menu_grp=MENU_GRP31&menu_no=661&show_cnt=10&start_idx=1&svc_no=COOKRCP01"
+    },
+    "sourceSha256": "b4aa95f11ae74c6cc5ad0940169fcecaaa120e23bafbb8f4f5b8802dd17a5eb0",
+    "reviewVersion": "mfds-quantity-2026-09-15-v1",
+    "reviewedAt": "2026-09-15",
+    "reviewMethod": "API 재료·조리 단계와 식약처 책자 페이지를 직접 대조. 직접 조리·전문가 검수가 아님.",
+    "book": {
+      "title": "우리 몸이 원하는 삼삼한 밥상",
+      "url": "https://www.foodsafetykorea.go.kr/upload/20170417/20170417053825_1492418305214.pdf",
+      "sha256": "a0c70b598bbc86fc097eee604552e52838c4dea831fd8536af45d0d2f8396614",
+      "pdfPage": 44,
+      "printedPages": [
+        86,
+        87
+      ]
+    },
+    "servings": 1,
+    "servingsEvidence": "PDF 44 / 책자 86–87쪽: 재료준비(1인분)",
+    "comparisonNote": "책자 5단계가 API 3단계로 묶여 있음. 참깨 약간은 정량 미확인.",
+    "ingredients": [
+      {
+        "id": "mfds:29:steam:chives",
+        "rawName": "조선부추",
+        "rawAmount": "50g",
+        "amount": 50,
+        "unit": "g",
+        "ingredientKey": "food:조선부추",
+        "preparationState": "raw",
+        "purpose": "부추찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "조선부추 50g"
+        }
+      },
+      {
+        "id": "mfds:29:steam:soy-flour",
+        "rawName": "날콩가루",
+        "rawAmount": "7g(1⅓작은술)",
+        "amount": 7,
+        "unit": "g",
+        "ingredientKey": "food:날콩가루",
+        "preparationState": "as-sold",
+        "purpose": "부추찜",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "날콩가루 7g(1⅓작은술)"
+        }
+      },
+      {
+        "id": "mfds:29:seasoning:soy-sauce",
+        "rawName": "저염간장",
+        "rawAmount": "3g(2/3작은술)",
+        "amount": 3,
+        "unit": "g",
+        "ingredientKey": "food:저염간장",
+        "preparationState": "as-sold",
+        "purpose": "양념장",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "저염간장 3g(2/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:29:seasoning:green-onion",
+        "rawName": "다진 대파",
+        "rawAmount": "5g(1작은술)",
+        "amount": 5,
+        "unit": "g",
+        "ingredientKey": "food:다진대파",
+        "preparationState": "raw",
+        "purpose": "양념장",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "다진 대파 5g(1작은술)"
+        }
+      },
+      {
+        "id": "mfds:29:seasoning:garlic",
+        "rawName": "다진 마늘",
+        "rawAmount": "2g(1/2쪽)",
+        "amount": 2,
+        "unit": "g",
+        "ingredientKey": "food:다진마늘",
+        "preparationState": "raw",
+        "purpose": "양념장",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "다진 마늘 2g(1/2쪽)"
+        }
+      },
+      {
+        "id": "mfds:29:seasoning:chili",
+        "rawName": "고춧가루",
+        "rawAmount": "2g(1/3작은술)",
+        "amount": 2,
+        "unit": "g",
+        "ingredientKey": "food:고춧가루",
+        "preparationState": "as-sold",
+        "purpose": "양념장",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "고춧가루 2g(1/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:29:seasoning:syrup",
+        "rawName": "요리당",
+        "rawAmount": "2g(1/3작은술)",
+        "amount": 2,
+        "unit": "g",
+        "ingredientKey": "food:요리당",
+        "preparationState": "as-sold",
+        "purpose": "양념장",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "요리당 2g(1/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:29:seasoning:oil",
+        "rawName": "참기름",
+        "rawAmount": "2g(1/3작은술)",
+        "amount": 2,
+        "unit": "g",
+        "ingredientKey": "food:참기름",
+        "preparationState": "as-sold",
+        "purpose": "양념장",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "참기름 2g(1/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:29:seasoning:sesame",
+        "rawName": "참깨",
+        "rawAmount": "약간",
+        "amount": null,
+        "unit": null,
+        "ingredientKey": "food:참깨",
+        "preparationState": "as-sold",
+        "purpose": "양념장",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "참깨 약간"
+        }
+      }
+    ],
+    "processInputs": []
+  },
+  {
+    "sourceSnapshot": {
+      "externalId": "32",
+      "name": "순두부 사과 소스 오이무침",
+      "ingredientsText": "●오이무침 :\n오이 70g(1/3개), 다진 땅콩 10g(1큰술)\n●순두부사과 소스 : \n순두부 40g(1/8봉지), 사과 50g(1/3개)",
+      "steps": [
+        {
+          "order": 1,
+          "text": "1. 사과, 순두부를 믹서에 넣고 곱게 갈아 소스를 만든다."
+        },
+        {
+          "order": 2,
+          "text": "2. 오이는 소금으로 문질러 씻어 반을 갈라 씨를 제거하고 어슷썰기를 한다."
+        },
+        {
+          "order": 3,
+          "text": "3. 썰어 놓은 오이에 순두부사과 소스를 넣고 버무린 후 다진 땅콩을 뿌려 마무리 한다."
+        }
+      ],
+      "source": "식품의약품안전처 조리식품의 레시피 DB",
+      "sourceUrl": "https://www.foodsafetykorea.go.kr/api/openApiInfo.do?menu_grp=MENU_GRP31&menu_no=661&show_cnt=10&start_idx=1&svc_no=COOKRCP01"
+    },
+    "sourceSha256": "cb9dcfb80a6f322b4131c0aee02aea228eb1ce3e697aa7dfbecaa1325ccebd59",
+    "reviewVersion": "mfds-quantity-2026-09-15-v1",
+    "reviewedAt": "2026-09-15",
+    "reviewMethod": "API 재료·조리 단계와 식약처 책자 페이지를 직접 대조. 직접 조리·전문가 검수가 아님.",
+    "book": {
+      "title": "우리 몸이 원하는 삼삼한 밥상",
+      "url": "https://www.foodsafetykorea.go.kr/upload/20170417/20170417053825_1492418305214.pdf",
+      "sha256": "a0c70b598bbc86fc097eee604552e52838c4dea831fd8536af45d0d2f8396614",
+      "pdfPage": 47,
+      "printedPages": [
+        92,
+        93
+      ]
+    },
+    "servings": 1,
+    "servingsEvidence": "PDF 47 / 책자 92–93쪽: 재료준비(1인분)",
+    "comparisonNote": "책자 4단계가 API 3단계로 묶여 있음. 세척용 소금은 재료표에 없고 조리 단계에만 등장.",
+    "ingredients": [
+      {
+        "id": "mfds:32:salad:cucumber",
+        "rawName": "오이",
+        "rawAmount": "70g(1/3개)",
+        "amount": 70,
+        "unit": "g",
+        "ingredientKey": "food:오이",
+        "preparationState": "raw",
+        "purpose": "오이무침",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "오이 70g(1/3개)"
+        }
+      },
+      {
+        "id": "mfds:32:garnish:peanut",
+        "rawName": "다진 땅콩",
+        "rawAmount": "10g(1큰술)",
+        "amount": 10,
+        "unit": "g",
+        "ingredientKey": "food:다진땅콩",
+        "preparationState": "as-sold",
+        "purpose": "오이무침",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "다진 땅콩 10g(1큰술)"
+        }
+      },
+      {
+        "id": "mfds:32:sauce:tofu",
+        "rawName": "순두부",
+        "rawAmount": "40g(1/8봉지)",
+        "amount": 40,
+        "unit": "g",
+        "ingredientKey": "food:순두부",
+        "preparationState": "as-sold",
+        "purpose": "순두부사과 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "순두부 40g(1/8봉지)"
+        }
+      },
+      {
+        "id": "mfds:32:sauce:apple",
+        "rawName": "사과",
+        "rawAmount": "50g(1/3개)",
+        "amount": 50,
+        "unit": "g",
+        "ingredientKey": "food:사과",
+        "preparationState": "raw",
+        "purpose": "순두부사과 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "사과 50g(1/3개)"
+        }
+      },
+      {
+        "id": "mfds:32:cleaning:salt",
+        "rawName": "소금",
+        "rawAmount": null,
+        "amount": null,
+        "unit": null,
+        "ingredientKey": "food:소금",
+        "preparationState": "as-sold",
+        "purpose": "세척",
+        "sourceLocation": {
+          "kind": "step",
+          "order": 2,
+          "text": "소금"
+        }
+      }
+    ],
+    "processInputs": []
+  },
+  {
+    "sourceSnapshot": {
+      "externalId": "91",
+      "name": "버섯구이와 두부타르타르 소스",
+      "ingredientsText": "●버섯구이 : 새송이버섯 70g(7개), 올리브유 10g(2작은술)\n●곁들임 : 치커리 10g(3줄기)\n●두부타르타르 소스 : 연두부 30g(1/4모), 다진 양파 10g(2작은술), 다진 오이피클 10g(2작은술), 올리브유 2g(1/3작은술), 식초 5g(1작은술), 레몬즙 3g(2/3작은술), 머스터드 3g(2/3작은술), 꿀 2g(1/3작은술), 흰 후추 약간",
+      "steps": [
+        {
+          "order": 1,
+          "text": "1. 곱게 다진 양파와 오이피클은 물기를 짠다."
+        },
+        {
+          "order": 2,
+          "text": "2. 연두부에 다진 양파, 다진 오이피클, 올리브유, 머스터드, 후추, 꿀, 식초, 레몬즙을 넣어 두부타르타르 소스를 만든다."
+        },
+        {
+          "order": 3,
+          "text": "3. 새송이버섯은 0.5cm 두께로 썰고 프라이팬에 노릇하게 구워준 후 접시에 새송이버섯과 치커리를 담고 소스를 곁들인다."
+        }
+      ],
+      "source": "식품의약품안전처 조리식품의 레시피 DB",
+      "sourceUrl": "https://www.foodsafetykorea.go.kr/api/openApiInfo.do?menu_grp=MENU_GRP31&menu_no=661&show_cnt=10&start_idx=1&svc_no=COOKRCP01"
+    },
+    "sourceSha256": "b9bb51e7bb6055596b6ae1cc53daad80818deb6d2f7b66e1ce1e724cd71cd5b3",
+    "reviewVersion": "mfds-quantity-2026-09-15-v1",
+    "reviewedAt": "2026-09-15",
+    "reviewMethod": "API 재료·조리 단계와 식약처 책자 페이지를 직접 대조. 직접 조리·전문가 검수가 아님.",
+    "book": {
+      "title": "우리 몸이 원하는 삼삼한 밥상",
+      "url": "https://www.foodsafetykorea.go.kr/upload/20170417/20170417053825_1492418305214.pdf",
+      "sha256": "a0c70b598bbc86fc097eee604552e52838c4dea831fd8536af45d0d2f8396614",
+      "pdfPage": 109,
+      "printedPages": [
+        216,
+        217
+      ]
+    },
+    "servings": 1,
+    "servingsEvidence": "PDF 109 / 책자 216–217쪽: 재료준비(1인분)",
+    "comparisonNote": "책자 6단계가 API 3단계로 묶여 있음. 두 용도의 올리브유 행을 각각 보존. 흰 후추 약간은 정량 미확인.",
+    "ingredients": [
+      {
+        "id": "mfds:91:grill:mushroom",
+        "rawName": "새송이버섯",
+        "rawAmount": "70g(7개)",
+        "amount": 70,
+        "unit": "g",
+        "ingredientKey": "food:새송이버섯",
+        "preparationState": "raw",
+        "purpose": "버섯구이",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "새송이버섯 70g(7개)"
+        }
+      },
+      {
+        "id": "mfds:91:grill:oil",
+        "rawName": "올리브유",
+        "rawAmount": "10g(2작은술)",
+        "amount": 10,
+        "unit": "g",
+        "ingredientKey": "food:올리브유",
+        "preparationState": "as-sold",
+        "purpose": "버섯구이",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "올리브유 10g(2작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:garnish:chicory",
+        "rawName": "치커리",
+        "rawAmount": "10g(3줄기)",
+        "amount": 10,
+        "unit": "g",
+        "ingredientKey": "food:치커리",
+        "preparationState": "raw",
+        "purpose": "곁들임",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "치커리 10g(3줄기)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:tofu",
+        "rawName": "연두부",
+        "rawAmount": "30g(1/4모)",
+        "amount": 30,
+        "unit": "g",
+        "ingredientKey": "food:연두부",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "연두부 30g(1/4모)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:onion",
+        "rawName": "다진 양파",
+        "rawAmount": "10g(2작은술)",
+        "amount": 10,
+        "unit": "g",
+        "ingredientKey": "food:다진양파",
+        "preparationState": "raw",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "다진 양파 10g(2작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:pickle",
+        "rawName": "다진 오이피클",
+        "rawAmount": "10g(2작은술)",
+        "amount": 10,
+        "unit": "g",
+        "ingredientKey": "food:다진오이피클",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "다진 오이피클 10g(2작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:oil",
+        "rawName": "올리브유",
+        "rawAmount": "2g(1/3작은술)",
+        "amount": 2,
+        "unit": "g",
+        "ingredientKey": "food:올리브유",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "올리브유 2g(1/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:vinegar",
+        "rawName": "식초",
+        "rawAmount": "5g(1작은술)",
+        "amount": 5,
+        "unit": "g",
+        "ingredientKey": "food:식초",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "식초 5g(1작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:lemon",
+        "rawName": "레몬즙",
+        "rawAmount": "3g(2/3작은술)",
+        "amount": 3,
+        "unit": "g",
+        "ingredientKey": "food:레몬즙",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "레몬즙 3g(2/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:mustard",
+        "rawName": "머스터드",
+        "rawAmount": "3g(2/3작은술)",
+        "amount": 3,
+        "unit": "g",
+        "ingredientKey": "food:머스터드",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "머스터드 3g(2/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:honey",
+        "rawName": "꿀",
+        "rawAmount": "2g(1/3작은술)",
+        "amount": 2,
+        "unit": "g",
+        "ingredientKey": "food:꿀",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "꿀 2g(1/3작은술)"
+        }
+      },
+      {
+        "id": "mfds:91:sauce:pepper",
+        "rawName": "흰 후추",
+        "rawAmount": "약간",
+        "amount": null,
+        "unit": null,
+        "ingredientKey": "food:흰후추",
+        "preparationState": "as-sold",
+        "purpose": "두부타르타르 소스",
+        "sourceLocation": {
+          "kind": "ingredients",
+          "text": "흰 후추 약간"
+        }
+      }
+    ],
+    "processInputs": []
+  }
+]

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import RouteMetadata from '../RouteMetadata';
+import baseHtml from '../../../index.html?raw';
 
 function installBaseHead() {
   document.head.innerHTML = `
@@ -17,6 +18,27 @@ function installBaseHead() {
 
 describe('RouteMetadata', () => {
   beforeEach(installBaseHead);
+
+  it('preserves the home share preview when client metadata loads over the real HTML shell', async () => {
+    document.head.innerHTML = new DOMParser().parseFromString(baseHtml, 'text/html').head.innerHTML;
+    const preview = () => ({
+      title: document.title,
+      description: document.head.querySelector('meta[name="description"]').content,
+      ogTitle: document.head.querySelector('meta[property="og:title"]').content,
+      ogDescription: document.head.querySelector('meta[property="og:description"]').content,
+      url: new URL(document.head.querySelector('meta[property="og:url"]').content).href,
+      canonical: document.head.querySelector('link[rel="canonical"]').href
+    });
+    const before = preview();
+
+    render(<MemoryRouter initialEntries={['/']}><RouteMetadata /></MemoryRouter>);
+    await waitFor(() => expect(document.head.querySelectorAll('[data-seo-structured-data]')).toHaveLength(2));
+
+    expect(preview()).toEqual(before);
+    expect(before.ogTitle).toBe(before.title);
+    expect(before.ogDescription).toBe(before.description);
+    expect(before.url).toBe(before.canonical);
+  });
 
   it('keeps client-side metadata and structured data aligned on public routes', async () => {
     render(

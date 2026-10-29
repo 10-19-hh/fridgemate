@@ -13,6 +13,277 @@ const ONE_PIXEL_PNG = Buffer.from(
   'base64'
 );
 
+test('leaving account cancels a pending browser download and a fresh export still works', async ({ page }) => {
+  await seedBrowserState(page, { session: { user: DEFAULT_USER } });
+  await mockApiSession(page, { user: DEFAULT_USER, restoreSession: true });
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  let received;
+  const requestReceived = new Promise(resolve => { received = resolve; });
+  const requests = [];
+  const downloads = [];
+  page.on('download', item => downloads.push(item.suggestedFilename()));
+  await page.route('**/api/auth/data-export', async route => {
+    requests.push(route.request().postDataJSON());
+    if (requests.length === 1) { received(); await pending; }
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'x-fixture-export': '1' },
+      body: JSON.stringify({ schemaVersion: 2, generatedAt: '2026-09-28T00:00:00.000Z', account: DEFAULT_USER,
+        ingredients: [], importCorrections: [], recommendationEvents: [], menuDecisions: [],
+        pantryOwnerships: [], preference: null, productEvents: [] }) });
+  });
+  await gotoAndWait(page, '/account');
+  await page.evaluate(() => {
+    const original = Response.prototype.json;
+    Response.prototype.json = async function (...args) {
+      const body = await original.apply(this, args);
+      if (this.headers.get('x-fixture-export') === '1') {
+        setTimeout(() => { window.__FRIDGEMATE_TEST__.exportBodyRead = true; }, 0);
+      }
+      return body;
+    };
+  });
+  await page.getByLabel('내려받기 전 현재 비밀번호 확인').fill('fixture-old-password');
+  await page.getByRole('button', { name: '내 데이터 내려받기', exact: true }).click();
+  await requestReceived;
+  await page.getByRole('navigation').getByRole('link', { name: '메뉴 추천', exact: true }).click();
+  await expect(page).toHaveURL(/\/recipes$/);
+  release();
+  await page.waitForFunction(() => window.__FRIDGEMATE_TEST__.exportBodyRead === true);
+  expect(downloads).toEqual([]);
+  await page.getByRole('link', { name: '계정', exact: true }).click();
+  await expect(page.getByLabel('내려받기 전 현재 비밀번호 확인')).toHaveValue('');
+  await page.getByLabel('내려받기 전 현재 비밀번호 확인').fill('fixture-new-password');
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: '내 데이터 내려받기', exact: true }).click();
+  expect((await download).suggestedFilename()).toMatch(/^fridgemate-data-\d{4}-\d{2}-\d{2}\.json$/);
+  expect(downloads).toHaveLength(1);
+  expect(requests).toEqual([{ password: 'fixture-old-password' }, { password: 'fixture-new-password' }]);
+  await expect(page.getByLabel('내려받기 전 현재 비밀번호 확인')).toHaveValue('');
+});
+
+test('a late login acknowledgement does not redirect a different lazy page', async ({ page }) => {
+  await seedBrowserState(page);
+  await mockApiSession(page, { user: DEFAULT_USER });
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  let received;
+  const requestReceived = new Promise(resolve => { received = resolve; });
+  let calls = 0;
+  await page.route('**/api/auth/login', async route => {
+    calls += 1;
+    received();
+    await pending;
+    await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'x-fixture-login': '1' },
+      body: JSON.stringify({ user: DEFAULT_USER }) });
+  });
+  await gotoAndWait(page, '/login');
+  await page.evaluate(() => {
+    const original = Response.prototype.json;
+    Response.prototype.json = async function (...args) {
+      const body = await original.apply(this, args);
+      if (this.headers.get('x-fixture-login') === '1') {
+        setTimeout(() => { window.__FRIDGEMATE_TEST__.loginBodyRead = true; }, 0);
+      }
+      return body;
+    };
+  });
+  await page.getByLabel('이메일').fill(DEFAULT_USER.email);
+  await page.getByLabel('비밀번호', { exact: true }).fill('fixture-password!');
+  await page.getByRole('button', { name: '로그인', exact: true }).click();
+  await requestReceived;
+  await page.getByRole('navigation').getByRole('link', { name: '메뉴 추천', exact: true }).click();
+  await expect(page).toHaveURL(/\/recipes$/);
+  release();
+  await page.waitForFunction(() => window.__FRIDGEMATE_TEST__.loginBodyRead === true);
+  await expect(page.getByRole('heading', { name: '남은 재료를 골라 조리법까지 살펴보세요' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '계정', exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/recipes$/);
+  expect(calls).toBe(1);
+});
+
+test('same-tick login submissions make one request and retain the protected return route', async ({ page }) => {
+  await seedBrowserState(page);
+  await mockApiSession(page, { user: DEFAULT_USER });
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  let received;
+  const requestReceived = new Promise(resolve => { received = resolve; });
+  let calls = 0;
+  await page.route('**/api/auth/login', async route => {
+    calls += 1;
+    received();
+    await pending;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: DEFAULT_USER }) });
+  });
+  await gotoAndWait(page, '/account');
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel('이메일').fill(DEFAULT_USER.email);
+  await page.getByLabel('비밀번호', { exact: true }).fill('fixture-password!');
+  await page.getByRole('button', { name: '로그인', exact: true }).evaluate(button => {
+    const form = button.closest('form');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+  });
+  await requestReceived;
+  await expect(page.getByRole('button', { name: '로그인 중...' })).toBeDisabled();
+  release();
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(page.getByRole('heading', { name: DEFAULT_USER.email, exact: true })).toBeVisible();
+  expect(calls).toBe(1);
+});
+
+for (const nextUser of [{ id: 'user-2', email: 'second@example.com' }, DEFAULT_USER]) {
+  test(`an old preference 401 is not replayed after logout and login as ${nextUser.id}`, async ({ page }) => {
+    await seedBrowserState(page, { session: { user: DEFAULT_USER } });
+    await mockApiSession(page, { user: DEFAULT_USER, restoreSession: true });
+    let currentUser = DEFAULT_USER;
+    const defaults = { preferredIngredients: [], dislikedIngredients: [], spiceLevel: 'medium', cookingTimePreference: 'flexible' };
+    const writes = [];
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    let received;
+    const requestReceived = new Promise(resolve => { received = resolve; });
+    await page.route('**/api/auth/refresh', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: currentUser }) }));
+    await page.route('**/api/auth/login', route => {
+      currentUser = nextUser;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ user: nextUser }) });
+    });
+    await page.route('**/api/user-preferences', async route => {
+      if (route.request().method() === 'PUT') {
+        writes.push({ userId: currentUser.id, body: route.request().postDataJSON() });
+        if (writes.length === 1) {
+          received();
+          await pending;
+          await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ message: 'Fixture expired first request' }) });
+          return;
+        }
+      }
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(defaults) });
+    });
+    await gotoAndWait(page, '/account');
+    await page.getByLabel('선호 재료', { exact: true }).fill('두부');
+    await page.getByRole('button', { name: '취향 저장', exact: true }).click();
+    await requestReceived;
+    const logoutFinished = page.waitForResponse(item => new URL(item.url()).pathname === '/api/auth/logout');
+    await page.getByRole('main').getByRole('button', { name: '로그아웃', exact: true }).click();
+    await logoutFinished;
+    await expect(page).toHaveURL(/\/login$/);
+    await page.getByLabel('이메일').fill(nextUser.email);
+    await page.getByLabel('비밀번호').fill('password123');
+    await page.getByRole('button', { name: '로그인', exact: true }).click();
+    await expect(page.getByRole('heading', { name: nextUser.email, exact: true })).toBeVisible();
+    const oldResponse = page.waitForResponse(item => item.request().method() === 'PUT' && new URL(item.url()).pathname === '/api/user-preferences');
+    release();
+    await oldResponse;
+    await page.waitForLoadState('networkidle');
+    expect(writes).toEqual([{ userId: DEFAULT_USER.id, body: { ...defaults, preferredIngredients: ['두부'] } }]);
+    await expect(page.getByRole('heading', { name: nextUser.email, exact: true })).toBeVisible();
+    await expect(page.getByLabel('선호 재료', { exact: true })).toHaveValue('');
+  });
+}
+
+test('preference quota failure clears success feedback and retries without losing saved choices', async ({ page }, testInfo) => {
+  await seedBrowserState(page, { session: { token: 'test-token', user: DEFAULT_USER } });
+  await mockApiSession(page, { user: DEFAULT_USER, restoreSession: true });
+  let writes = 0;
+  const stored = { preferredIngredients: [], dislikedIngredients: [], spiceLevel: 'medium', cookingTimePreference: 'flexible' };
+  await page.route('**/api/user-preferences', async route => {
+    if (route.request().method() === 'PUT') {
+      writes += 1;
+      Object.assign(stored, route.request().postDataJSON());
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(stored) });
+  });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await gotoAndWait(page, '/account');
+  const panel = page.locator('section').filter({ has: page.getByRole('heading', { name: '자주 찾는 재료와 피하고 싶은 재료' }) });
+  await panel.getByLabel('선호 재료', { exact: true }).fill('두부');
+  await panel.getByRole('button', { name: '취향 저장', exact: true }).click();
+  await expect(panel.getByText('취향 설정을 저장했습니다.', { exact: true })).toBeVisible();
+  expect(writes).toBe(1);
+  await page.evaluate(() => {
+    const original = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key, value) {
+      if (key === 'fridgemate-user-preferences:v1:user:user-1') {
+        throw new DOMException('Fixture full storage', 'QuotaExceededError');
+      }
+      return original.call(this, key, value);
+    };
+    window.__FRIDGEMATE_TEST__.restorePreferenceWrite = () => { Storage.prototype.setItem = original; };
+  });
+  await panel.getByLabel('매운맛').selectOption('mild');
+  await expect(panel.getByRole('alert')).toContainText(/저장하지 못/);
+  await expect(panel.getByText('취향 설정을 저장했습니다.', { exact: true })).toHaveCount(0);
+  await expect(panel.getByLabel('매운맛')).toHaveValue('medium');
+  await panel.getByLabel('선호 재료', { exact: true }).fill('두부, 버섯');
+  await panel.getByRole('button', { name: '취향 저장', exact: true }).click();
+  await expect(panel.getByLabel('선호 재료', { exact: true })).toHaveValue('두부, 버섯');
+  await expect(panel.getByRole('alert')).toContainText(/저장하지 못/);
+  expect(writes).toBe(1);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('fridgemate-user-preferences:v1:user:user-1'))))
+    .toEqual({ preferredIngredients: ['두부'], dislikedIngredients: [], spiceLevel: 'medium', cookingTimePreference: 'flexible' });
+  await panel.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath('preference-storage-failure-desktop.png') });
+  await page.evaluate(() => window.__FRIDGEMATE_TEST__.restorePreferenceWrite());
+  await panel.getByRole('button', { name: '취향 저장', exact: true }).click();
+  await expect(panel.getByText('취향 설정을 저장했습니다.', { exact: true })).toBeVisible();
+  expect(writes).toBe(2);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('fridgemate-user-preferences:v1:user:user-1'))))
+    .toEqual({ preferredIngredients: ['두부', '버섯'], dislikedIngredients: [], spiceLevel: 'medium', cookingTimePreference: 'flexible' });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(panel.getByLabel('선호 재료', { exact: true })).toHaveValue('두부, 버섯');
+  expect(errors).toEqual([]);
+});
+
+test('late preference acknowledgement cannot recreate data cleared by secure logout', async ({ page }) => {
+  await seedBrowserState(page, { session: { token: 'test-token', user: DEFAULT_USER } });
+  await mockApiSession(page, { user: DEFAULT_USER, restoreSession: true });
+  const defaults = { preferredIngredients: [], dislikedIngredients: [], spiceLevel: 'medium', cookingTimePreference: 'flexible' };
+  let acknowledge;
+  const pending = new Promise(resolve => { acknowledge = resolve; });
+  let received;
+  const requestReceived = new Promise(resolve => { received = resolve; });
+  await page.route('**/api/user-preferences', async route => {
+    const body = route.request().method() === 'PUT' ? route.request().postDataJSON() : defaults;
+    if (route.request().method() === 'PUT') { received(); await pending; }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body),
+      headers: route.request().method() === 'PUT' ? { 'x-fixture-late-put': '1' } : {} });
+  });
+  await gotoAndWait(page, '/account');
+  await page.getByLabel('선호 재료', { exact: true }).fill('두부');
+  await page.getByRole('button', { name: '취향 저장', exact: true }).click();
+  await requestReceived;
+  await expect(page.getByRole('button', { name: '저장 중...' })).toBeDisabled();
+  page.once('dialog', dialog => dialog.accept());
+  const logoutFinished = page.waitForResponse(item => new URL(item.url()).pathname === '/api/auth/logout');
+  await page.getByRole('button', { name: '이 기기 데이터도 지우고 로그아웃', exact: true }).click();
+  await logoutFinished;
+  await expect(page).toHaveURL(/\/login$/);
+  expect(await page.evaluate(() => localStorage.getItem('fridgemate-user-preferences:v1:user:user-1'))).toBeNull();
+  await page.evaluate(() => {
+    const original = Response.prototype.json;
+    Response.prototype.json = async function (...args) {
+      const body = await original.apply(this, args);
+      if (this.headers.get('x-fixture-late-put') === '1') {
+        setTimeout(() => {
+          window.__FRIDGEMATE_TEST__.preferenceAcknowledged = true;
+          Response.prototype.json = original;
+        }, 0);
+      }
+      return body;
+    };
+  });
+  const response = page.waitForResponse(item => item.request().method() === 'PUT'
+    && new URL(item.url()).pathname === '/api/user-preferences');
+  acknowledge();
+  await response;
+  // Observe body consumption and the following browser task, not merely response headers.
+  await page.waitForFunction(() => window.__FRIDGEMATE_TEST__.preferenceAcknowledged === true);
+  expect(await page.evaluate(() => localStorage.getItem('fridgemate-user-preferences:v1:user:user-1'))).toBeNull();
+  await expect(page).toHaveURL(/\/login$/);
+});
+
 async function clickServerBackupButton(page) {
   const backupButton = page.getByRole('button', { name: '서버에 백업하기' });
   await expect(backupButton).toBeVisible();

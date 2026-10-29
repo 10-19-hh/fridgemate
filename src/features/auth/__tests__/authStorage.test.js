@@ -1,7 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildUserStorageScope,
   clearAccountFeatureStorage,
+  clearGuestImportDecision,
   clearPendingLogout,
   clearSessionHint,
   clearStoredAuthSession,
@@ -20,7 +21,28 @@ describe('authStorage', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     window.localStorage.clear();
+  });
+
+  it.each([
+    ['session hint', hasSessionHint, false],
+    ['pending logout', hasPendingLogout, false],
+    ['guest import decision', () => getGuestImportDecision('user-1'), ''],
+    ['mark session present', markSessionPresent, false],
+    ['mark logout pending', markLogoutPending, false],
+    ['clear legacy session', clearStoredAuthSession, false],
+    ['clear session hint', clearSessionHint, false],
+    ['clear logout fence', clearPendingLogout, false],
+    ['clear guest import decision', () => clearGuestImportDecision('user-1'), false],
+    ['clear account features', () => clearAccountFeatureStorage('user-1'), false],
+    ['set guest import decision', () => setGuestImportDecision('user-1', 'dismissed'), undefined]
+  ])('handles a blocked storage getter for %s without reporting a successful write or cleanup', (_name, operation, expected) => {
+    vi.spyOn(window, 'localStorage', 'get').mockImplementation(() => {
+      throw new DOMException('Storage access denied', 'SecurityError');
+    });
+
+    expect(operation()).toBe(expected);
   });
 
   it('removes the legacy persisted server session', () => {

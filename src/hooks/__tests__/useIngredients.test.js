@@ -595,6 +595,106 @@ describe('useIngredients', () => {
     });
   });
 
+  describe('manual sync session ownership', () => {
+    async function readySync() {
+      backendState.enabled = true;
+      setAuthenticatedMode('sync-owner');
+      window.localStorage.removeItem('fridgemate-last-synced-at:v2:user:sync-owner');
+      const view = await renderUseIngredients();
+      await waitFor(() => expect(view.result.current.loading).toBe(false));
+      return view;
+    }
+    async function changeAccount(view, account = 'sync-other') {
+      setAuthenticatedMode(account); view.rerender();
+      await waitFor(() => expect(view.result.current.loading).toBe(false));
+    }
+
+    it.each(['pushIngredientsToServer', 'pullIngredientsFromServer'])('rejects a retained %s callback before dispatch in another account', async action => {
+      const view = await readySync();
+      const oldAction = view.result.current[action];
+      await changeAccount(view);
+      let result;
+      await act(async () => { result = await oldAction(); });
+      expect(result.ok).toBe(false);
+      expect(apiMocks[action]).not.toHaveBeenCalled();
+      expect(view.result.current.error).toBe('');
+      expect(view.result.current.syncStatus).toBe('idle');
+    });
+
+    it.each([false, true])('does not dispatch an old upload after its local read spans an account change (return=%s)', async returnToOwner => {
+      const view = await readySync();
+      const read = createDeferred();
+      dbMocks.getAllIngredientsForSync.mockReturnValueOnce(read.promise);
+      let pending;
+      act(() => { pending = view.result.current.pushIngredientsToServer(); });
+      await changeAccount(view);
+      if (returnToOwner) await changeAccount(view, 'sync-owner');
+      let result;
+      await act(async () => {
+        read.resolve([createIngredient('private-a', { syncState: 'pendingCreate' })]);
+        result = await pending;
+      });
+      expect(result.ok).toBe(false);
+      expect(apiMocks.pushIngredientsToServer).not.toHaveBeenCalled();
+      expect(dbMocks.replaceIngredients).not.toHaveBeenCalled();
+      expect(view.result.current.ingredients).toEqual([]);
+      expect(view.result.current.error).toBe('');
+      expect(view.result.current.syncStatus).toBe('idle');
+    });
+
+    it.each(['pushIngredientsToServer', 'pullIngredientsFromServer'])('does not persist a late %s response after switching accounts', async action => {
+      const view = await readySync();
+      const request = createDeferred();
+      apiMocks[action].mockReturnValueOnce(request.promise);
+      let pending;
+      act(() => { pending = view.result.current[action](); });
+      await waitFor(() => expect(apiMocks[action]).toHaveBeenCalledOnce());
+      await changeAccount(view);
+      let result;
+      await act(async () => {
+        request.resolve({ items: [createIngredient('private-a')], appliedCount: 1 });
+        result = await pending;
+      });
+      expect(result.ok).toBe(false);
+      expect(dbMocks.replaceIngredients).not.toHaveBeenCalled();
+      expect(view.result.current.ingredients).toEqual([]);
+      expect(view.result.current.syncStatus).toBe('idle');
+      expect(view.result.current.error).toBe('');
+      expect(window.localStorage.getItem('fridgemate-last-synced-at:v2:user:sync-owner')).toBeNull();
+    });
+
+    it.each(['pushIngredientsToServer', 'pullIngredientsFromServer'])('does not show an old %s failure in the current account', async action => {
+      const view = await readySync();
+      const request = createDeferred();
+      apiMocks[action].mockReturnValueOnce(request.promise);
+      let pending;
+      act(() => { pending = view.result.current[action](); });
+      await waitFor(() => expect(apiMocks[action]).toHaveBeenCalledOnce());
+      await changeAccount(view);
+      await act(async () => { request.reject(new MockIngredientsApiError('private old failure', { status: 403 })); await pending; });
+      expect(view.result.current.error).toBe('');
+      expect(view.result.current.syncError).toBeNull();
+      expect(view.result.current.syncStatus).toBe('idle');
+      expect(dbMocks.replaceIngredients).not.toHaveBeenCalled();
+    });
+
+    it.each(['pushIngredientsToServer', 'pullIngredientsFromServer'])('ignores a completed old %s cache acknowledgement without claiming to cancel storage', async action => {
+      const view = await readySync();
+      const cache = createDeferred();
+      dbMocks.replaceIngredients.mockReturnValueOnce(cache.promise);
+      let pending;
+      act(() => { pending = view.result.current[action](); });
+      await waitFor(() => expect(dbMocks.replaceIngredients).toHaveBeenCalledOnce());
+      await changeAccount(view);
+      let result;
+      await act(async () => { cache.resolve(); result = await pending; });
+      expect(result.ok).toBe(false);
+      expect(view.result.current.error).toBe('');
+      expect(view.result.current.syncStatus).toBe('idle');
+      expect(window.localStorage.getItem('fridgemate-last-synced-at:v2:user:sync-owner')).toBeNull();
+    });
+  });
+
   describe('derived filtering and sorting from hook data', () => {
     it('returns data that consumers can filter by category, sort by expiry, and split by consumed status', async () => {
       setGuestMode();

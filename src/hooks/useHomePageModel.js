@@ -14,7 +14,7 @@ export function useHomePageModel() {
         .map((staple) => staple.name),
     [pantryOwnership, pantryStaples]
   );
-  const { recommendations, ingredients, loading } = useRecipeRecommendations(ownedPantryItems);
+  const { recommendations, ingredients, loading, readError, loadIngredients } = useRecipeRecommendations(ownedPantryItems);
   const summary = useMemo(() => getDashboardSummary(ingredients), [ingredients]);
   const topRecommendations = useMemo(
     () => recommendations.filter((recipe) => recipe.score > 0).slice(0, 3),
@@ -25,6 +25,8 @@ export function useHomePageModel() {
 
   return {
     loading,
+    readError,
+    loadIngredients,
     summary,
     topRecommendations,
     upcomingItems,

@@ -104,6 +104,85 @@ describe('meal template source contract', () => {
 });
 
 describe('weekly generation and snapshots', () => {
+  it('preserves the complete overdue planned snapshot despite changed servings, exclusions and dinner days', () => {
+    const first = generate();
+    first.slots[0].notice = undefined;
+    const before = structuredClone(first.slots[0]);
+    const next = generate({ previousPlan: first, confirmedPlan: first, now: new Date(2026, 8, 15, 0, 1),
+      preferences: { servings: 1, dinnerDays: [1], excludedIngredients: [first.slots[0].components[0].ingredients[0].rawName] } });
+    expect(next.slots[0]).toStrictEqual(before);
+    expect(next.slots[1].servings).toBe(1);
+    next.slots[0].components[0].ingredients[0].rawName = '복사본 수정';
+    expect(first.slots[0]).toStrictEqual(before);
+  });
+
+  it('uses the supplied local calendar day and still permits regeneration of today', () => {
+    const first = generate();
+    const next = generate({ previousPlan: first, now: new Date(2026, 8, 14, 23, 59),
+      preferences: { ...preferences, servings: 1 } });
+    expect(next.slots[0].servings).toBe(1);
+  });
+
+  it('replays the complete confirmed overdue snapshot including an explicitly undefined optional field', () => {
+    const confirmed = generate();
+    confirmed.slots[0].notice = undefined;
+    const before = structuredClone(confirmed);
+    const plan = generate({ confirmedPlan: confirmed, now: new Date(2026, 8, 15, 0, 1) });
+
+    expect(plan.slots[0]).toStrictEqual(before.slots[0]);
+    expect(generateMealPlan(plan.generationInput)).toStrictEqual(plan);
+    plan.generationInput.confirmedPlan.slots[0].components[0].ingredients[0].rawName = '입력 복사본 수정';
+    expect(confirmed).toStrictEqual(before);
+    expect(plan.slots[0]).toStrictEqual(before.slots[0]);
+  });
+
+  it('continues editing an overdue unconfirmed draft because it never reserved inventory', () => {
+    const draft = generate();
+    const changed = generate({ previousPlan: draft, now: new Date(2026, 8, 15, 0, 1),
+      preferences: { ...preferences, servings: 1, dinnerDays: [1] } });
+    expect(changed.slots[0].status).toBe('skipped');
+    const replaced = replaceMealPlanSlot(draft, draft.slots[0].id, { now: new Date(2026, 8, 15, 0, 1) });
+    expect(replaced.slots[0].templateKey).not.toBe(draft.slots[0].templateKey);
+  });
+
+  it('restores the protected confirmed meal instead of trusting a changed past draft snapshot', () => {
+    const confirmed = generate();
+    const draft = structuredClone(confirmed);
+    draft.slots[0].components[0].ingredients[0].amount = 999;
+    draft.slots[0].servings = 1;
+    const changed = generate({ previousPlan: draft, confirmedPlan: confirmed, now: new Date(2026, 8, 15, 0, 1) });
+    expect(changed.slots[0]).toStrictEqual(confirmed.slots[0]);
+    expect(generateMealPlan(changed.generationInput)).toStrictEqual(changed);
+  });
+
+  it('preserves an explicit skip draft for a protected past meal during later regeneration', () => {
+    const confirmed = generate();
+    const draft = setMealPlanSlotSkipped(confirmed, confirmed.slots[0].id, true, { now: new Date(2026, 8, 15, 0, 1) });
+    const changed = generate({ previousPlan: draft, confirmedPlan: confirmed, now: new Date(2026, 8, 15, 0, 2), preferences });
+    expect(changed.slots[0]).toStrictEqual(draft.slots[0]);
+  });
+
+  it('replays an explicit overdue skip without losing optional source fields from the draft', () => {
+    const confirmed = generate();
+    confirmed.slots[0].components[0].source.reviewMethod = undefined;
+    const draft = setMealPlanSlotSkipped(confirmed, confirmed.slots[0].id, true, { now: new Date(2026, 8, 15, 0, 1) });
+    const before = structuredClone({ confirmed, draft });
+    const plan = generate({ previousPlan: draft, confirmedPlan: confirmed, now: new Date(2026, 8, 15, 0, 2) });
+
+    expect(plan.slots[0]).toStrictEqual(before.draft.slots[0]);
+    expect(generateMealPlan(plan.generationInput)).toStrictEqual(plan);
+    plan.generationInput.previousPlan.slots[0].components[0].source.reviewMethod = '입력 복사본 수정';
+    expect({ confirmed, draft }).toStrictEqual(before);
+    expect(plan.slots[0]).toStrictEqual(before.draft.slots[0]);
+  });
+
+  it.each([{ scope: 'user:other' }, { weekStart: '2026-09-21' }])('rejects a foreign confirmed snapshot %j instead of silently dropping protection', options => {
+    const confirmed = generate(options);
+    const draft = generate();
+    expect(() => generate({ previousPlan: draft, confirmedPlan: confirmed })).toThrow();
+    expect(() => replaceMealPlanSlot(draft, draft.slots[0].id, { confirmedPlan: confirmed, now })).toThrow();
+  });
+
   it('creates seven ordered dinner slots and skips unselected weekdays', () => {
     const plan = generate({ preferences: { ...preferences, dinnerDays: [0, 2, 4] } });
     expect(plan).toMatchObject({ id: `week:${weekStart}`, schemaVersion: 1, scope: 'guest', revision: 1, createdAt: now, updatedAt: now });
@@ -151,7 +230,8 @@ describe('weekly generation and snapshots', () => {
   });
 
   it('shows empty slots and an explanation if every candidate is excluded', () => {
-    const plan = generate({ preferences: { ...preferences, excludedIngredients: ['밥', '파스타면'] } });
+    // Raw rice and Chinese noodles remain separate from cooked rice and pasta.
+    const plan = generate({ preferences: { ...preferences, excludedIngredients: ['밥', '파스타면', '소면', '쌀', '중화면'] } });
     expect(plan.slots.every((slot) => slot.status === 'empty' && slot.templateKey === null)).toBe(true);
     expect(plan.slots[0].reason).toContain('메뉴가 없어요');
   });
@@ -236,6 +316,14 @@ describe('inventory checking without quantity guarantees', () => {
 });
 
 describe('menu changes, locks and skipped dates', () => {
+  it('does not replace an overdue planned meal or release its pending demand', () => {
+    const plan = generate();
+    const before = structuredClone(plan);
+    const next = replaceMealPlanSlot(plan, plan.slots[0].id, { confirmedPlan: plan, now: new Date(2026, 8, 15, 0, 1) });
+    expect(next).toBe(plan);
+    expect(plan).toStrictEqual(before);
+  });
+
   it('replaces with a different eligible menu and increments revision without inventory writes', () => {
     const plan = generate();
     const ingredients = [inventory('밥')];
@@ -249,14 +337,14 @@ describe('menu changes, locks and skipped dates', () => {
   });
 
   it('explains when no replacement meets current preferences', () => {
-    const plan = generate({ preferences: { ...preferences, excludedIngredients: ['밥', '파스타면'] } });
+    const plan = generate({ preferences: { ...preferences, excludedIngredients: ['밥', '파스타면', '소면', '쌀', '중화면'] } });
     const next = replaceMealPlanSlot(plan, plan.slots[0].id, { now });
     expect(next.slots[0].status).toBe('empty');
     expect(next.slots[0].reason).toContain('다른 메뉴가 없어요');
   });
 
   it('keeps the selected dinner and displays a notice when it is the only eligible option', () => {
-    const plan = generate({ preferences: { ...preferences, excludedIngredients: ['밥', '토마토'] } });
+    const plan = generate({ preferences: { ...preferences, excludedIngredients: ['밥', '토마토', '소면', '쌀', '중화면', '두유'] } });
     expect(plan.slots[0].templateKey).toBe('local-meal:broccoli-pasta');
     const next = replaceMealPlanSlot(plan, plan.slots[0].id, { now });
     expect(next.slots[0].templateKey).toBe(plan.slots[0].templateKey);
@@ -319,7 +407,7 @@ describe('menu changes, locks and skipped dates', () => {
   it('does not restore excluded ingredients from a previously skipped snapshot', () => {
     const plan = generate();
     const skipped = setMealPlanSlotSkipped(plan, plan.slots[0].id, true, { now });
-    const withExclusions = { ...skipped, preferences: { ...skipped.preferences, excludedIngredients: ['밥', '파스타면'] } };
+    const withExclusions = { ...skipped, preferences: { ...skipped.preferences, excludedIngredients: ['밥', '파스타면', '소면', '쌀', '중화면'] } };
     const restored = setMealPlanSlotSkipped(withExclusions, plan.slots[0].id, false, { now });
     expect(restored.slots[0].status).toBe('empty');
     expect(restored.slots[0].templateKey).toBeNull();

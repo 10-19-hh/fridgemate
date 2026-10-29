@@ -26,6 +26,10 @@
       ]
     },
     {
+      "source": "/pilot",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }]
+    },
+    {
       "source": "/meal-plan",
       "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive" }]
     },
@@ -55,6 +59,7 @@
     }
   ],
   "rewrites": [
+    { "source": "/pilot", "destination": "/_seo/app.html" },
     { "source": "/meal-plan", "destination": "/_seo/app.html" },
     { "source": "/recipes", "destination": "/_seo/recipes.html" },
     { "source": "/recipes/ingredients/:ingredientSlug", "destination": "/_seo/recipes/ingredients/:ingredientSlug.html" },

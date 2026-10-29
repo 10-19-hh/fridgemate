@@ -2,8 +2,9 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { createServer } from 'vite';
 import { cleanGeneratedSeo, removeCanonicalLinks } from './lib/seoHtmlSecurity.js';
+import { getBuildOutputDirectory } from './lib/localPilotBuild.js';
 
-const outputDirectory = resolve(process.cwd(), 'dist');
+const outputDirectory = resolve(process.cwd(), getBuildOutputDirectory());
 const templatePath = resolve(outputDirectory, 'index.html');
 
 const routeOutputFiles = {

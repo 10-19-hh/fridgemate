@@ -13,10 +13,11 @@ const statusClassName = {
   [PANTRY_STATUS.UNKNOWN]: 'border-slate-200 bg-white text-slate-600'
 };
 
-function PantryStapleButton({ item, status, onCycle }) {
+function PantryStapleButton({ item, status, onCycle, disabled }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => onCycle(item.id)}
       className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-sm font-medium transition hover:-translate-y-0.5 ${statusClassName[status]}`}
     >
@@ -26,7 +27,7 @@ function PantryStapleButton({ item, status, onCycle }) {
   );
 }
 
-function PantryCategoryGroup({ title, items, pantryOwnership, onCycle }) {
+function PantryCategoryGroup({ title, items, pantryOwnership, onCycle, disabled }) {
   return (
     <section className="space-y-2">
       <h3 className="text-xs font-bold text-slate-700">{title}</h3>
@@ -34,14 +35,14 @@ function PantryCategoryGroup({ title, items, pantryOwnership, onCycle }) {
         {items.map((item) => {
           const status = pantryOwnership[item.id] || PANTRY_STATUS.UNKNOWN;
 
-          return <PantryStapleButton key={item.id} item={item} status={status} onCycle={onCycle} />;
+          return <PantryStapleButton key={item.id} item={item} status={status} onCycle={onCycle} disabled={disabled} />;
         })}
       </div>
     </section>
   );
 }
 
-function PantryStaplesPanel({ pantryOwnership, pantrySummary, onCycle }) {
+function PantryStaplesPanel({ pantryOwnership, pantrySummary, onCycle, error, disabled = false, onRetry, onRetrySave }) {
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -57,6 +58,12 @@ function PantryStaplesPanel({ pantryOwnership, pantrySummary, onCycle }) {
         </div>
       </div>
 
+      {error ? <div className="mt-3 space-y-2">
+        <p role="alert" className="text-sm leading-6 text-rose-700">{error}</p>
+        {onRetrySave ? <button type="button" className="btn-secondary" disabled={disabled} onClick={onRetrySave}>팬트리 다시 저장</button>
+          : onRetry ? <button type="button" className="btn-secondary" onClick={onRetry}>팬트리 설정 다시 확인</button> : null}
+      </div> : null}
+
       <div className="mt-4 grid gap-5 xl:grid-cols-2">
         <div className="space-y-4">
           <div>
@@ -70,6 +77,7 @@ function PantryStaplesPanel({ pantryOwnership, pantrySummary, onCycle }) {
               items={category.items}
               pantryOwnership={pantryOwnership}
               onCycle={onCycle}
+              disabled={disabled}
             />
           ))}
         </div>
@@ -86,6 +94,7 @@ function PantryStaplesPanel({ pantryOwnership, pantrySummary, onCycle }) {
               items={category.items}
               pantryOwnership={pantryOwnership}
               onCycle={onCycle}
+              disabled={disabled}
             />
           ))}
         </div>

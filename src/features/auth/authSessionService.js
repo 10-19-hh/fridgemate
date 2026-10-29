@@ -3,6 +3,10 @@ import * as indexedDb from '../../db/indexedDB';
 import { clearScopeState } from '../ingredients/ingredientsScopeState';
 import { clearImportCorrections } from '../../utils/import/importLearning';
 import {
+  assertAuthActionOwner, beginAuthChange, beginAuthVerification, captureAuthContext, createAuthContextChangedError, finishAuthChange,
+  isAuthContextCurrent, updateAuthIdentity
+} from './authSessionContext';
+import {
   buildUserStorageScope,
   clearGuestImportDecision,
   clearAccountFeatureStorage,
@@ -33,6 +37,7 @@ export function isAuthorizationError(error) {
 }
 
 export function persistSession(nextSession, setSession) {
+  updateAuthIdentity(nextSession?.user?.id);
   clearStoredAuthSession();
 
   if (nextSession?.user?.id) {
@@ -46,8 +51,14 @@ export function persistSession(nextSession, setSession) {
 }
 
 export async function refreshStoredSession({ backendEnabled, setSession, setLoading, setError }) {
+  let operation = beginAuthVerification();
+  if (operation.transitioning) return null;
+  const persistOwnedSession = (nextSession) => {
+    persistSession(nextSession, setSession);
+    operation = captureAuthContext();
+  };
   if (!backendEnabled) {
-    persistSession(null, setSession);
+    persistOwnedSession(null);
     setLoading(false);
     return null;
   }
@@ -56,13 +67,15 @@ export async function refreshStoredSession({ backendEnabled, setSession, setLoad
 
   try {
     if (hasPendingLogout()) {
-      persistSession(null, setSession);
+      persistOwnedSession(null);
 
       try {
         await authApi.logout();
+        if (!isAuthContextCurrent(operation)) return null;
         clearPendingLogout();
         setError('');
       } catch {
+        if (!isAuthContextCurrent(operation)) return null;
         setError(LOGOUT_PENDING_MESSAGE);
       }
 
@@ -70,18 +83,23 @@ export async function refreshStoredSession({ backendEnabled, setSession, setLoad
     }
 
     if (!hasSessionHint()) {
-      persistSession(null, setSession);
+      persistOwnedSession(null);
       setError('');
       return null;
     }
 
     const nextSession = await authApi.refreshSession();
+    if (!isAuthContextCurrent(operation)) return null;
+    if (!nextSession?.user?.id || (operation.userId && nextSession.user.id !== operation.userId)) {
+      throw new Error(SESSION_VERIFICATION_FAILED_MESSAGE);
+    }
 
-    persistSession(nextSession, setSession);
+    persistOwnedSession(nextSession);
     setError('');
     return nextSession;
   } catch (nextError) {
-    persistSession(null, setSession);
+    if (!isAuthContextCurrent(operation)) return null;
+    persistOwnedSession(null);
 
     if (isAuthorizationError(nextError)) {
       setError(nextError.message || 'Your session expired. Please log in again.');
@@ -91,32 +109,48 @@ export async function refreshStoredSession({ backendEnabled, setSession, setLoad
     setError(SESSION_VERIFICATION_FAILED_MESSAGE);
     return null;
   } finally {
-    setLoading(false);
+    if (isAuthContextCurrent(operation)) setLoading(false);
   }
 }
 
-export async function signupWithSession(credentials, { backendEnabled, setSession, setError }) {
+export async function signupWithSession(credentials, { backendEnabled, setSession, setError, setLoading }) {
   if (!backendEnabled) {
     throw createUnavailableAuthError();
   }
 
-  const nextSession = await authApi.signup(credentials);
-  clearPendingLogout();
-  persistSession(nextSession, setSession);
-  setError('');
-  return nextSession;
+  const operation = beginAuthChange();
+  setLoading?.(false);
+  try {
+    const nextSession = await authApi.signup(credentials);
+    if (!isAuthContextCurrent(operation)) throw createAuthContextChangedError();
+    clearPendingLogout();
+    persistSession(nextSession, setSession);
+    finishAuthChange(captureAuthContext());
+    setError('');
+    return nextSession;
+  } finally {
+    finishAuthChange(operation);
+  }
 }
 
-export async function loginWithSession(credentials, { backendEnabled, setSession, setError }) {
+export async function loginWithSession(credentials, { backendEnabled, setSession, setError, setLoading }) {
   if (!backendEnabled) {
     throw createUnavailableAuthError();
   }
 
-  const nextSession = await authApi.login(credentials);
-  clearPendingLogout();
-  persistSession(nextSession, setSession);
-  setError('');
-  return nextSession;
+  const operation = beginAuthChange();
+  setLoading?.(false);
+  try {
+    const nextSession = await authApi.login(credentials);
+    if (!isAuthContextCurrent(operation)) throw createAuthContextChangedError();
+    clearPendingLogout();
+    persistSession(nextSession, setSession);
+    finishAuthChange(captureAuthContext());
+    setError('');
+    return nextSession;
+  } finally {
+    finishAuthChange(operation);
+  }
 }
 
 export async function clearLocalUserData(userId) {
@@ -128,9 +162,7 @@ export async function clearLocalUserData(userId) {
   const storageScope = buildUserStorageScope(userId);
 
   for (const cleanupDatabase of [
-    () => indexedDb.clearIngredients({ scope: storageScope }),
-    () => indexedDb.clearMenuDecisions({ scope: storageScope }),
-    () => indexedDb.clearMealPlans({ scope: storageScope }),
+    () => indexedDb.clearAccountLocalData({ scope: storageScope }),
     () => indexedDb.deleteDatabase({ scope: storageScope })
   ]) {
     try {
@@ -181,12 +213,20 @@ export async function logoutSession({
   setSession,
   setGuestImportPrompt,
   setError,
+  setLoading,
+  ownerContext = captureAuthContext(),
   defaultGuestImportPrompt
 }) {
+  assertAuthActionOwner(ownerContext);
+  beginAuthChange();
+  setLoading?.(false);
   if (!backendEnabled) {
     clearPendingLogout();
     persistSession(null, setSession);
+    const operation = captureAuthContext();
     const localCleanupComplete = clearLocalData ? await clearLocalUserData(user?.id) : true;
+    if (!isAuthContextCurrent(operation)) return buildLogoutResult(false, false, clearLocalData, localCleanupComplete);
+    finishAuthChange(operation);
     setGuestImportPrompt(defaultGuestImportPrompt);
     setError(buildLogoutError('', clearLocalData, localCleanupComplete));
     return buildLogoutResult(true, false, clearLocalData, localCleanupComplete);
@@ -194,16 +234,20 @@ export async function logoutSession({
 
   const logoutFenced = markLogoutPending();
   persistSession(null, setSession);
+  const operation = captureAuthContext();
   const localCleanupComplete = clearLocalData ? await clearLocalUserData(user?.id) : true;
+  if (!isAuthContextCurrent(operation)) return buildLogoutResult(false, false, clearLocalData, localCleanupComplete);
 
   try {
     await authApi.logout();
+    if (!isAuthContextCurrent(operation)) return buildLogoutResult(false, false, clearLocalData, localCleanupComplete);
     clearPendingLogout();
     persistSession(null, setSession);
     setGuestImportPrompt(defaultGuestImportPrompt);
     setError(buildLogoutError('', clearLocalData, localCleanupComplete));
     return buildLogoutResult(true, false, clearLocalData, localCleanupComplete);
   } catch {
+    if (!isAuthContextCurrent(operation)) return buildLogoutResult(false, false, clearLocalData, localCleanupComplete);
     setGuestImportPrompt(defaultGuestImportPrompt);
 
     if (logoutFenced) {
@@ -213,6 +257,8 @@ export async function logoutSession({
 
     setError(buildLogoutError(LOGOUT_FAILED_MESSAGE, clearLocalData, localCleanupComplete));
     return buildLogoutResult(false, false, clearLocalData, localCleanupComplete);
+  } finally {
+    finishAuthChange(operation);
   }
 }
 
@@ -224,16 +270,21 @@ export async function deleteAccountWithSession(
     setSession,
     setGuestImportPrompt,
     setError,
+    ownerContext = captureAuthContext(),
     defaultGuestImportPrompt
   }
 ) {
+  assertAuthActionOwner(ownerContext);
   if (!backendEnabled || !user?.id) {
     throw createUnavailableAuthError();
   }
 
+  const operation = captureAuthContext();
   await authApi.deleteAccount(password);
+  if (!isAuthContextCurrent(operation)) throw createAuthContextChangedError();
 
   const localCleanupComplete = await clearLocalUserData(user.id);
+  if (!isAuthContextCurrent(operation)) throw createAuthContextChangedError();
 
   clearPendingLogout();
   persistSession(null, setSession);

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import FDBFactory from 'fake-indexeddb/lib/FDBFactory';
 
 const authApiMocks = {
   deleteAccount: vi.fn(),
@@ -10,6 +11,7 @@ const authApiMocks = {
 };
 
 const indexedDbMocks = {
+  clearAccountLocalData: vi.fn(),
   clearIngredients: vi.fn(),
   clearMenuDecisions: vi.fn(),
   clearMealPlans: vi.fn(),
@@ -29,6 +31,7 @@ vi.mock('../../../api/authApi.js', () => ({
 }));
 
 vi.mock('../../../db/indexedDB.js', () => ({
+  clearAccountLocalData: (...args) => indexedDbMocks.clearAccountLocalData(...args),
   clearIngredients: (...args) => indexedDbMocks.clearIngredients(...args),
   clearMenuDecisions: (...args) => indexedDbMocks.clearMenuDecisions(...args),
   clearMealPlans: (...args) => indexedDbMocks.clearMealPlans(...args),
@@ -41,13 +44,49 @@ vi.mock('../../ingredients/ingredientsScopeState.js', () => ({
 
 describe('authSessionService', () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
     window.localStorage.clear();
+    indexedDbMocks.clearAccountLocalData.mockResolvedValue(undefined);
     indexedDbMocks.clearIngredients.mockResolvedValue(undefined);
     indexedDbMocks.clearMenuDecisions.mockResolvedValue(undefined);
     indexedDbMocks.clearMealPlans.mockResolvedValue(undefined);
     indexedDbMocks.deleteDatabase.mockResolvedValue(undefined);
     scopeStateMocks.clearScopeState.mockReturnValue(true);
+  });
+
+  it.each(['server response', 'local cleanup'])('does not clear the new account when deletion waits for %s', async (phase) => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const service = await import('../authSessionService.js');
+    let current;
+    const options = { backendEnabled: true, user: { id: 'A' }, setSession: vi.fn((value) => { current = value; }),
+      setError: vi.fn(), setGuestImportPrompt: vi.fn(), defaultGuestImportPrompt: {} };
+    service.persistSession({ user: { id: 'A' } }, options.setSession);
+    authApiMocks.deleteAccount.mockReturnValue(phase === 'server response' ? gate : Promise.resolve());
+    if (phase === 'local cleanup') indexedDbMocks.clearAccountLocalData.mockReturnValue(gate);
+    const deleting = service.deleteAccountWithSession('password', options).catch((error) => error);
+    if (phase === 'local cleanup') await vi.waitFor(() => expect(indexedDbMocks.clearAccountLocalData).toHaveBeenCalled());
+    authApiMocks.login.mockResolvedValue({ user: { id: 'B' } });
+    await service.loginWithSession({}, options);
+    release();
+    expect(await deleting).toMatchObject({ code: 'AUTH_CONTEXT_CHANGED' });
+    expect(current).toEqual({ user: { id: 'B' } });
+  });
+
+  it('does not apply a local-only logout completion after the identity has changed during cleanup', async () => {
+    let release;
+    indexedDbMocks.clearAccountLocalData.mockReturnValue(new Promise((resolve) => { release = resolve; }));
+    const service = await import('../authSessionService.js');
+    const options = { backendEnabled: false, user: { id: 'A' }, clearLocalData: true,
+      setSession: vi.fn(), setError: vi.fn(), setGuestImportPrompt: vi.fn(), defaultGuestImportPrompt: {} };
+    service.persistSession({ user: { id: 'A' } }, options.setSession);
+    const pending = service.logoutSession(options);
+    service.persistSession({ user: { id: 'B' } }, options.setSession);
+    release();
+    expect(await pending).toMatchObject({ ok: false });
+    expect(options.setGuestImportPrompt).not.toHaveBeenCalled();
+    expect(options.setError).not.toHaveBeenCalled();
   });
 
   it('restores a server-verified session without persisting identity in localStorage', async () => {
@@ -215,9 +254,7 @@ describe('authSessionService', () => {
 
     expect(result).toEqual({ ok: false, pending: true, localCleanupComplete: true });
     expect(setSession).toHaveBeenCalledWith(null);
-    expect(indexedDbMocks.clearIngredients).toHaveBeenCalledWith({ scope: 'user:user-1' });
-    expect(indexedDbMocks.clearMenuDecisions).toHaveBeenCalledWith({ scope: 'user:user-1' });
-    expect(indexedDbMocks.clearMealPlans).toHaveBeenCalledWith({ scope: 'user:user-1' });
+    expect(indexedDbMocks.clearAccountLocalData).toHaveBeenCalledWith({ scope: 'user:user-1' });
     expect(indexedDbMocks.deleteDatabase).toHaveBeenCalledWith({ scope: 'user:user-1' });
     expect(scopeStateMocks.clearScopeState).toHaveBeenCalledWith('user:user-1');
     expect(window.localStorage.getItem('fridgemate-pantry-ownership:v2:user:user-1')).toBeNull();
@@ -340,9 +377,7 @@ describe('authSessionService', () => {
     });
 
     expect(authApiMocks.deleteAccount).toHaveBeenCalledWith('StrongPassphrase123!');
-    expect(indexedDbMocks.clearIngredients).toHaveBeenCalledWith({ scope: 'user:user-1' });
-    expect(indexedDbMocks.clearMenuDecisions).toHaveBeenCalledWith({ scope: 'user:user-1' });
-    expect(indexedDbMocks.clearMealPlans).toHaveBeenCalledWith({ scope: 'user:user-1' });
+    expect(indexedDbMocks.clearAccountLocalData).toHaveBeenCalledWith({ scope: 'user:user-1' });
     expect(indexedDbMocks.deleteDatabase).toHaveBeenCalledWith({ scope: 'user:user-1' });
     expect(scopeStateMocks.clearScopeState).toHaveBeenCalledWith('user:user-1');
     expect(window.localStorage.getItem('fridgemate-guest-import:user-1')).toBeNull();
@@ -379,9 +414,7 @@ describe('authSessionService', () => {
     });
 
     expect(result).toEqual({ localCleanupComplete: false });
-    expect(indexedDbMocks.clearIngredients).toHaveBeenCalledWith({ scope: 'user:user-1' });
-    expect(indexedDbMocks.clearMenuDecisions).toHaveBeenCalledWith({ scope: 'user:user-1' });
-    expect(indexedDbMocks.clearMealPlans).toHaveBeenCalledWith({ scope: 'user:user-1' });
+    expect(indexedDbMocks.clearAccountLocalData).toHaveBeenCalledWith({ scope: 'user:user-1' });
     expect(window.localStorage.getItem('fridgemate-guest-import:user-1')).toBeNull();
     expect(window.localStorage.getItem('fridgemate-import-corrections:v2:user:user-1')).toBeNull();
     expect(setSession).toHaveBeenLastCalledWith(null);
@@ -392,7 +425,7 @@ describe('authSessionService', () => {
 
   it('continues later cleanup steps after an earlier local database cleanup fails', async () => {
     authApiMocks.deleteAccount.mockResolvedValue(null);
-    indexedDbMocks.clearIngredients.mockRejectedValue(new Error('clear failed'));
+    indexedDbMocks.clearAccountLocalData.mockRejectedValue(new Error('clear failed'));
     window.localStorage.setItem('fridgemate-import-corrections:v2:user:user-1', '{}');
     const { deleteAccountWithSession } = await import('../authSessionService.js');
     const setSession = vi.fn();
@@ -408,8 +441,7 @@ describe('authSessionService', () => {
     });
 
     expect(result).toEqual({ localCleanupComplete: false });
-    expect(indexedDbMocks.clearMenuDecisions).toHaveBeenCalledWith({ scope: 'user:user-1' });
-    expect(indexedDbMocks.clearMealPlans).toHaveBeenCalledWith({ scope: 'user:user-1' });
+    expect(indexedDbMocks.clearAccountLocalData).toHaveBeenCalledWith({ scope: 'user:user-1' });
     expect(indexedDbMocks.deleteDatabase).toHaveBeenCalledWith({ scope: 'user:user-1' });
     expect(window.localStorage.getItem('fridgemate-import-corrections:v2:user:user-1')).toBeNull();
     expect(setSession).toHaveBeenLastCalledWith(null);
@@ -438,13 +470,14 @@ describe('authSessionService', () => {
     expect(indexedDbMocks.clearIngredients).not.toHaveBeenCalled();
     expect(indexedDbMocks.clearMenuDecisions).not.toHaveBeenCalled();
     expect(indexedDbMocks.clearMealPlans).not.toHaveBeenCalled();
+    expect(indexedDbMocks.clearAccountLocalData).not.toHaveBeenCalled();
     expect(indexedDbMocks.deleteDatabase).not.toHaveBeenCalled();
     expect(setSession).not.toHaveBeenCalled();
   });
 
   it('reports incomplete local cleanup rather than claiming all private data was removed', async () => {
     authApiMocks.deleteAccount.mockResolvedValue(null);
-    indexedDbMocks.clearMealPlans.mockRejectedValueOnce(new Error('Storage unavailable'));
+    indexedDbMocks.clearAccountLocalData.mockRejectedValueOnce(new Error('Storage unavailable'));
     const { deleteAccountWithSession } = await import('../authSessionService.js');
     const setSession = vi.fn();
     const setError = vi.fn();
@@ -456,4 +489,137 @@ describe('authSessionService', () => {
     expect(setSession).toHaveBeenLastCalledWith(null);
     expect(setError).toHaveBeenLastCalledWith(expect.stringContaining('브라우저 사이트 데이터를 삭제'));
   });
+
+  it('preserves pilot consent and observations on ordinary logout while removing the session', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window, 'indexedDB');
+    const factory = new FDBFactory();
+    Object.defineProperty(window, 'indexedDB', { configurable: true, value: factory });
+    const db = await vi.importActual('../../../db/indexedDB.js');
+    for (const method of Object.keys(indexedDbMocks)) indexedDbMocks[method].mockImplementation(db[method]);
+    const scopes = ['user:pilot-logout', 'guest'];
+    try {
+      expect(db.runMealPlanPilotTransaction).toBeTypeOf('function');
+      for (const scope of scopes) {
+        await db.runMealPlanPilotTransaction('readwrite', store => store.put({ id: 'session', scope,
+          consent: true, privateObservations: ['local fixture'] }), scope);
+        await db.saveIngredient({ id: 'stock', name: '보존할 재료' }, scope);
+      }
+      const before = await Promise.all(scopes.map(async scope => ({
+        pilot: await db.runMealPlanPilotTransaction('readonly', store => store.getAll(), scope),
+        ingredients: await db.getAllIngredients(scope),
+      })));
+      window.localStorage.setItem('fridgemate-auth-session-present:v1', '1');
+      const service = await import('../authSessionService.js');
+      const setSession = vi.fn();
+      const result = await service.logoutSession({ backendEnabled: false, user: { id: 'pilot-logout' },
+        setSession, setError: vi.fn(), setGuestImportPrompt: vi.fn(), defaultGuestImportPrompt: {} });
+      expect(result).toEqual({ ok: true, pending: false });
+      expect(setSession).toHaveBeenLastCalledWith(null);
+      expect(window.localStorage.getItem('fridgemate-auth-session-present:v1')).toBeNull();
+      expect(await Promise.all(scopes.map(async scope => ({
+        pilot: await db.runMealPlanPilotTransaction('readonly', store => store.getAll(), scope),
+        ingredients: await db.getAllIngredients(scope),
+      })))).toStrictEqual(before);
+    } finally {
+      for (const scope of scopes) await db.deleteDatabase(scope);
+      if (descriptor) Object.defineProperty(window, 'indexedDB', descriptor);
+      else delete window.indexedDB;
+    }
+  });
+
+  it.each(['account deletion', 'shared-device logout'])(
+    'erases private stores during %s despite a corrupt quantity review and a blocked database deletion',
+    async (operation) => {
+      const descriptor = Object.getOwnPropertyDescriptor(window, 'indexedDB');
+      const factory = new FDBFactory();
+      Object.defineProperty(window, 'indexedDB', { configurable: true, value: factory });
+      const db = await vi.importActual('../../../db/indexedDB.js');
+      expect(db.runShoppingTransaction).toBeTypeOf('function');
+      for (const method of Object.keys(indexedDbMocks)) indexedDbMocks[method].mockImplementation(db[method]);
+      const scopes = ['user:cleanup-target', 'guest', 'user:cleanup-other'];
+      let blocker;
+      try {
+        expect(db.runMealPlanPilotTransaction).toBeTypeOf('function');
+        for (const scope of scopes) {
+          await db.saveIngredient({ id: 'private-stock', name: '개인 재고', quantity: '반 모' }, scope);
+          await db.saveMenuDecision({ decisionDate: '2026-09-15', memo: '개인 메뉴' }, scope);
+          await db.runMealPlanTransaction('readwrite', (store) => store.put({ id: 'week:2026-09-14', title: '개인 식단' }), scope);
+          await db.runShoppingTransaction('readwrite', (store) => store.put({
+            id: 'purchase:private', schemaVersion: 99, scope, memo: '개인 구매 메모'
+          }), scope);
+          await db.runInventoryReceiptTransaction('readwrite', ({ events }) => events.put({
+            id: 'receipt:private', schemaVersion: 99, scope, memo: '개인 입고 이력'
+          }), scope);
+          await db.runMealPlanPilotTransaction('readwrite', store => store.put({
+            id: 'session', schemaVersion: 99, scope, memo: '개인 파일럿 기록'
+          }), scope);
+        }
+        await db.runInventoryQuantityTransaction('readwrite', ({ quantities }) => quantities.put({
+          id: 'private-stock', scope: 'user:cleanup-target', schemaVersion: 99,
+          revision: 7, status: 'verified', sourceToken: 'private fixture source',
+        }), 'user:cleanup-target');
+        const guestBefore = await db.readMealPlanningSnapshot('guest');
+        const otherBefore = await db.readMealPlanningSnapshot('user:cleanup-other');
+        const guestShoppingBefore = await db.runShoppingTransaction('readonly', (store) => store.getAll(), 'guest');
+        const otherShoppingBefore = await db.runShoppingTransaction('readonly', (store) => store.getAll(), 'user:cleanup-other');
+        const guestEventsBefore = await db.runInventoryReceiptTransaction('readonly', ({ events }) => events.getAll(), 'guest');
+        const otherEventsBefore = await db.runInventoryReceiptTransaction('readonly', ({ events }) => events.getAll(), 'user:cleanup-other');
+        const guestPilotBefore = await db.runMealPlanPilotTransaction('readonly', store => store.getAll(), 'guest');
+        const otherPilotBefore = await db.runMealPlanPilotTransaction('readonly', store => store.getAll(), 'user:cleanup-other');
+        blocker = await new Promise((resolve, reject) => {
+          const request = factory.open('fridgemate-db__user_cleanup-target');
+          request.onsuccess = () => resolve(request.result);
+          request.onerror = () => reject(request.error);
+        });
+        blocker.onversionchange = () => {};
+        window.localStorage.setItem('fridgemate-auth-session-present:v1', '1');
+        window.localStorage.setItem('fridgemate-import-corrections:v2:user:cleanup-target', '{}');
+        const service = await import('../authSessionService.js');
+        const setSession = vi.fn();
+        const setError = vi.fn();
+        const options = { backendEnabled: true, user: { id: 'cleanup-target' }, setSession, setError,
+          setGuestImportPrompt: vi.fn(), defaultGuestImportPrompt: {} };
+        let result;
+        if (operation === 'account deletion') {
+          authApiMocks.deleteAccount.mockResolvedValue(null);
+          result = await service.deleteAccountWithSession('test-password', options);
+          expect(result).toEqual({ localCleanupComplete: false });
+          expect(setError).toHaveBeenLastCalledWith(expect.stringContaining('계정은 삭제됐지만'));
+        } else {
+          authApiMocks.logout.mockRejectedValue(new Error('simulated offline logout'));
+          result = await service.logoutSession({ ...options, clearLocalData: true });
+          expect(result).toEqual({ ok: false, pending: true, localCleanupComplete: false });
+          expect(setError).toHaveBeenLastCalledWith(expect.stringContaining(service.LOGOUT_PENDING_MESSAGE));
+          expect(setError).toHaveBeenLastCalledWith(expect.stringContaining(service.LOCAL_DATA_CLEANUP_FAILED_MESSAGE));
+          expect(window.localStorage.getItem('fridgemate-auth-logout-pending:v1')).toBe('1');
+        }
+        expect(setSession).toHaveBeenLastCalledWith(null);
+        expect(window.localStorage.getItem('fridgemate-auth-session-present:v1')).toBeNull();
+        expect(window.localStorage.getItem('fridgemate-import-corrections:v2:user:cleanup-target')).toBeNull();
+        const remaining = await new Promise((resolve, reject) => {
+          const transaction = blocker.transaction(['ingredients', 'menuDecisions', 'mealPlans', 'inventoryQuantities', 'shoppingEntries', 'inventoryEvents', 'mealPlanPilot']);
+          const requests = ['ingredients', 'menuDecisions', 'mealPlans', 'inventoryQuantities', 'shoppingEntries', 'inventoryEvents', 'mealPlanPilot']
+            .map((store) => transaction.objectStore(store).getAll());
+          transaction.oncomplete = () => resolve(requests.map((request) => request.result));
+          transaction.onerror = () => reject(transaction.error);
+        });
+        expect(remaining).toEqual([[], [], [], [], [], [], []]);
+        expect(await db.readMealPlanningSnapshot('guest')).toEqual(guestBefore);
+        expect(await db.readMealPlanningSnapshot('user:cleanup-other')).toEqual(otherBefore);
+        expect(await db.runShoppingTransaction('readonly', (store) => store.getAll(), 'guest')).toEqual(guestShoppingBefore);
+        expect(await db.runShoppingTransaction('readonly', (store) => store.getAll(), 'user:cleanup-other')).toEqual(otherShoppingBefore);
+        expect(await db.runInventoryReceiptTransaction('readonly', ({ events }) => events.getAll(), 'guest')).toEqual(guestEventsBefore);
+        expect(await db.runInventoryReceiptTransaction('readonly', ({ events }) => events.getAll(), 'user:cleanup-other')).toEqual(otherEventsBefore);
+        expect(await db.runMealPlanPilotTransaction('readonly', store => store.getAll(), 'guest')).toEqual(guestPilotBefore);
+        expect(await db.runMealPlanPilotTransaction('readonly', store => store.getAll(), 'user:cleanup-other')).toEqual(otherPilotBefore);
+        expect(await db.getMenuDecision('2026-09-15', 'guest')).toEqual({ decisionDate: '2026-09-15', memo: '개인 메뉴' });
+        expect(await db.getMenuDecision('2026-09-15', 'user:cleanup-other')).toEqual({ decisionDate: '2026-09-15', memo: '개인 메뉴' });
+      } finally {
+        blocker?.close();
+        for (const scope of scopes) await db.deleteDatabase(scope);
+        if (descriptor) Object.defineProperty(window, 'indexedDB', descriptor);
+        else delete window.indexedDB;
+      }
+    }
+  );
 });

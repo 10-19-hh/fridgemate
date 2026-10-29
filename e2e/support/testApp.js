@@ -52,11 +52,11 @@ export async function seedBrowserState(
       }
 
       function deleteDatabase(name) {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
           const request = window.indexedDB.deleteDatabase(name);
           request.onsuccess = () => resolve();
-          request.onerror = () => resolve();
-          request.onblocked = () => resolve();
+          request.onerror = () => reject(request.error);
+          request.onblocked = () => reject(new DOMException('', 'BlockedError'));
         });
       }
 
@@ -91,20 +91,28 @@ export async function seedBrowserState(
 
         const database = await openDatabase(getDatabaseName(scopeName));
 
-        await new Promise((resolve, reject) => {
-          const transaction = database.transaction('ingredients', 'readwrite');
-          const store = transaction.objectStore('ingredients');
-          items.forEach((ingredient) => store.put(ingredient));
-          transaction.oncomplete = () => resolve();
-          transaction.onerror = () => reject(transaction.error);
-          transaction.onabort = () => reject(transaction.error);
-        });
-
-        database.close();
+        try {
+          await new Promise((resolve, reject) => {
+            const transaction = database.transaction('ingredients', 'readwrite');
+            const store = transaction.objectStore('ingredients');
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = () => reject(transaction.error);
+            transaction.onabort = () => reject(transaction.error);
+            try {
+              items.forEach((ingredient) => store.put(ingredient));
+            } catch (error) {
+              transaction.abort();
+              reject(error);
+            }
+          });
+        } finally {
+          database.close();
+        }
       }
 
       window.__FRIDGEMATE_TEST__ = window.__FRIDGEMATE_TEST__ || {};
       window.__FRIDGEMATE_TEST__.setupComplete = false;
+      window.__FRIDGEMATE_TEST__.setupError = null;
 
       if (nextOcrResult) {
         window.__FRIDGEMATE_TEST__.extractTextFromImage = async (_file, options = {}) => {
@@ -116,26 +124,30 @@ export async function seedBrowserState(
         };
       }
 
-      if (window.sessionStorage.getItem(seedKey) === 'done') {
-        window.__FRIDGEMATE_TEST__.setupComplete = true;
-        return;
-      }
-
-      window.localStorage.clear();
-      if (nextAnalyticsConsent) {
-        window.localStorage.setItem('fridgemate-analytics-consent', nextAnalyticsConsent);
-      }
-
-      if (nextSession) {
-        window.localStorage.setItem('fridgemate-auth-session', JSON.stringify(nextSession));
-      }
-
-      Promise.all([deleteDatabase(getDatabaseName('guest')), deleteDatabase(getDatabaseName('user:user-1'))])
-        .then(() => seedIngredients(nextScope, nextIngredients))
-        .finally(() => {
-          window.sessionStorage.setItem(seedKey, 'done');
+      async function seed() {
+        if (window.sessionStorage.getItem(seedKey) === 'done') {
           window.__FRIDGEMATE_TEST__.setupComplete = true;
-        });
+          return;
+        }
+
+        window.localStorage.clear();
+        if (nextAnalyticsConsent) {
+          window.localStorage.setItem('fridgemate-analytics-consent', nextAnalyticsConsent);
+        }
+
+        if (nextSession) {
+          window.localStorage.setItem('fridgemate-auth-session', JSON.stringify(nextSession));
+        }
+
+        await Promise.all([deleteDatabase(getDatabaseName('guest')), deleteDatabase(getDatabaseName('user:user-1'))]);
+        await seedIngredients(nextScope, nextIngredients);
+        window.sessionStorage.setItem(seedKey, 'done');
+        window.__FRIDGEMATE_TEST__.setupComplete = true;
+      }
+
+      seed().catch(error => {
+        window.__FRIDGEMATE_TEST__.setupError = error?.name || 'Error';
+      });
     },
     {
       nextSession: session,
@@ -145,6 +157,22 @@ export async function seedBrowserState(
       nextAnalyticsConsent: analyticsConsent
     }
   );
+
+  // Prepare storage on an inert same-origin document before a fast production
+  // bundle can read it. Waiting after app navigation is too late for its cache.
+  const seedDocument = '**/__fridgemate-e2e-seed__';
+  await page.route(seedDocument, route => route.fulfill({
+    status: 200, contentType: 'text/html', body: '<!doctype html><html><body></body></html>'
+  }));
+  try {
+    await page.goto('/__fridgemate-e2e-seed__');
+    await page.waitForFunction(() => window.__FRIDGEMATE_TEST__?.setupComplete === true
+      || Boolean(window.__FRIDGEMATE_TEST__?.setupError));
+    const setupError = await page.evaluate(() => window.__FRIDGEMATE_TEST__.setupError);
+    if (setupError) throw new Error(`Browser fixture setup failed: ${setupError}`);
+  } finally {
+    await page.unroute(seedDocument);
+  }
 }
 
 export async function gotoAndWait(page, path = '/') {

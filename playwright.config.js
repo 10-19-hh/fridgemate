@@ -19,7 +19,7 @@ export default defineConfig({
   projects: [
     {
       name: 'local-only',
-      testMatch: ['local-only.spec.js', 'ocr-import.spec.js', 'analytics-consent.spec.js', 'public-recipes.spec.js', 'meal-plan.spec.js'],
+      testMatch: ['local-only.spec.js', 'seed-setup.spec.js', 'accessibility.spec.js', 'ocr-import.spec.js', 'analytics-consent.spec.js', 'public-recipes.spec.js', 'meal-plan.spec.js', 'meal-plan-changes.spec.js', 'purchase-receiving.spec.js'],
       use: {
         ...sharedUse,
         ...devices['Desktop Chrome'],
@@ -28,7 +28,7 @@ export default defineConfig({
     },
     {
       name: 'api-mode',
-      testMatch: ['api-mode.spec.js', 'sync-conflicts.spec.js', 'meal-plan-account.spec.js'],
+      testMatch: ['api-mode.spec.js', 'sync-conflicts.spec.js', 'meal-plan-account.spec.js', 'meal-cooking.spec.js'],
       use: {
         ...sharedUse,
         ...devices['Desktop Chrome'],

@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-09-21T00:00:00.000Z",
+  "subjects": [
+    {
+      "id": "sub_00000000000000000000000000000001",
+      "kind": "account",
+      "observedFrom": "2026-09-06T15:00:00.000Z",
+      "observedThrough": "2026-09-21T00:00:00.000Z",
+      "firstGenerationKnown": true,
+      "gaps": []
+    },
+    {
+      "id": "sub_00000000000000000000000000000002",
+      "kind": "account",
+      "observedFrom": "2026-09-06T15:00:00.000Z",
+      "observedThrough": "2026-09-13T15:00:00.000Z",
+      "firstGenerationKnown": false,
+      "gaps": []
+    },
+    {
+      "id": "sub_00000000000000000000000000000003",
+      "kind": "guest",
+      "observedFrom": "2026-09-06T15:00:00.000Z",
+      "observedThrough": "2026-09-21T00:00:00.000Z",
+      "firstGenerationKnown": true,
+      "gaps": []
+    }
+  ],
+  "events": [
+    {
+      "id": "evt_00000000000000000000000000000001",
+      "version": 1,
+      "name": "meal_plan_generation_started",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-07T00:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "started",
+      "operationId": "op_00000000000000000000000000000001",
+      "planId": "plan_00000000000000000000000000000001"
+    },
+    {
+      "id": "evt_00000000000000000000000000000002",
+      "version": 1,
+      "name": "meal_plan_generated",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-07T00:01:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000001",
+      "planId": "plan_00000000000000000000000000000001",
+      "plannedSlotCount": 2
+    },
+    {
+      "id": "evt_00000000000000000000000000000003",
+      "version": 1,
+      "name": "meal_plan_confirmed",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-07T00:02:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000003",
+      "planId": "plan_00000000000000000000000000000001",
+      "plannedSlotCount": 2
+    },
+    {
+      "id": "evt_00000000000000000000000000000004",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-07T10:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000004",
+      "planId": "plan_00000000000000000000000000000001",
+      "slotId": "slot_00000000000000000000000000000001"
+    },
+    {
+      "id": "evt_00000000000000000000000000000005",
+      "version": 1,
+      "name": "consumption_applied",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-07T10:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000004",
+      "planId": "plan_00000000000000000000000000000001",
+      "slotId": "slot_00000000000000000000000000000001"
+    },
+    {
+      "id": "evt_00000000000000000000000000000006",
+      "version": 1,
+      "name": "consumption_reversed",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-08T09:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000006",
+      "planId": "plan_00000000000000000000000000000001",
+      "slotId": "slot_00000000000000000000000000000001",
+      "reversesEventId": "evt_00000000000000000000000000000005"
+    },
+    {
+      "id": "evt_00000000000000000000000000000007",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-08T10:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000007",
+      "planId": "plan_00000000000000000000000000000001",
+      "slotId": "slot_00000000000000000000000000000002"
+    },
+    {
+      "id": "evt_00000000000000000000000000000008",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-14T10:00:00.000Z",
+      "weekKey": "2026-09-14",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000008",
+      "planId": "plan_00000000000000000000000000000002",
+      "slotId": "slot_00000000000000000000000000000003"
+    },
+    {
+      "id": "evt_00000000000000000000000000000009",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000001",
+      "occurredAt": "2026-09-15T10:00:00.000Z",
+      "weekKey": "2026-09-14",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000009",
+      "planId": "plan_00000000000000000000000000000002",
+      "slotId": "slot_00000000000000000000000000000004"
+    },
+    {
+      "id": "evt_00000000000000000000000000000010",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000002",
+      "occurredAt": "2026-09-09T10:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000010",
+      "planId": "plan_00000000000000000000000000000003",
+      "slotId": "slot_00000000000000000000000000000005"
+    },
+    {
+      "id": "evt_00000000000000000000000000000011",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000002",
+      "occurredAt": "2026-09-10T10:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000011",
+      "planId": "plan_00000000000000000000000000000003",
+      "slotId": "slot_00000000000000000000000000000006"
+    },
+    {
+      "id": "evt_00000000000000000000000000000012",
+      "version": 1,
+      "name": "meal_plan_generation_started",
+      "subjectId": "sub_00000000000000000000000000000003",
+      "occurredAt": "2026-09-07T00:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "started",
+      "operationId": "op_00000000000000000000000000000012",
+      "planId": "plan_00000000000000000000000000000004"
+    },
+    {
+      "id": "evt_00000000000000000000000000000013",
+      "version": 1,
+      "name": "meal_plan_generated",
+      "subjectId": "sub_00000000000000000000000000000003",
+      "occurredAt": "2026-09-07T00:01:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000012",
+      "planId": "plan_00000000000000000000000000000004",
+      "plannedSlotCount": 2
+    },
+    {
+      "id": "evt_00000000000000000000000000000014",
+      "version": 1,
+      "name": "meal_plan_confirmed",
+      "subjectId": "sub_00000000000000000000000000000003",
+      "occurredAt": "2026-09-10T00:02:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000014",
+      "planId": "plan_00000000000000000000000000000004",
+      "plannedSlotCount": 2
+    },
+    {
+      "id": "evt_00000000000000000000000000000015",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000003",
+      "occurredAt": "2026-09-10T10:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000015",
+      "planId": "plan_00000000000000000000000000000004",
+      "slotId": "slot_00000000000000000000000000000007"
+    },
+    {
+      "id": "evt_00000000000000000000000000000016",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000003",
+      "occurredAt": "2026-09-11T10:00:00.000Z",
+      "weekKey": "2026-09-07",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000016",
+      "planId": "plan_00000000000000000000000000000004",
+      "slotId": "slot_00000000000000000000000000000008"
+    },
+    {
+      "id": "evt_00000000000000000000000000000017",
+      "version": 1,
+      "name": "meal_cooked_recorded",
+      "subjectId": "sub_00000000000000000000000000000003",
+      "occurredAt": "2026-09-15T10:00:00.000Z",
+      "weekKey": "2026-09-14",
+      "status": "success",
+      "operationId": "op_00000000000000000000000000000017",
+      "planId": "plan_00000000000000000000000000000005",
+      "slotId": "slot_00000000000000000000000000000009"
+    }
+  ]
+}

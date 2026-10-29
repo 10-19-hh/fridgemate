@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError, requestJson } from '../apiClient.js';
+import { persistSession } from '../../features/auth/authSessionService.js';
 
 describe('apiClient request correlation', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+    persistSession(null, () => {});
   });
 
   it('retains the server request id on API errors', async () => {
@@ -32,6 +34,7 @@ describe('apiClient request correlation', () => {
   });
 
   it('shares one refresh request across simultaneous authenticated 401 responses', async () => {
+    persistSession({ user: { id: 'user-1' } }, () => {});
     let finishRefresh;
     const refreshResponse = new Promise((resolve) => {
       finishRefresh = resolve;
@@ -70,7 +73,7 @@ describe('apiClient request correlation', () => {
       expect(fetchMock.mock.calls.filter(([url]) => url.endsWith('/auth/refresh'))).toHaveLength(1);
     });
 
-    finishRefresh({ ok: true, status: 200 });
+    finishRefresh({ ok: true, status: 200, json: async () => ({ user: { id: 'user-1' } }) });
 
     await expect(Promise.all([firstRequest, secondRequest])).resolves.toEqual([
       { path: expect.stringMatching(/\/ingredients$/) },

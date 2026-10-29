@@ -1,21 +1,38 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import { useAnalytics } from '../hooks/useAnalytics';
+import { useAuth } from '../hooks/useAuth';
 import { useIngredients } from '../hooks/useIngredients';
 import { defaultIngredientForm, ingredientCategories, storageTypes } from '../utils/ingredientOptions';
 
 function IngredientFormPage() {
-  const navigate = useNavigate();
   const { ingredientId } = useParams();
+  const { storageScope } = useAuth();
+
+  return <IngredientForm key={JSON.stringify([storageScope, ingredientId])} ingredientId={ingredientId} />;
+}
+
+function IngredientForm({ ingredientId }) {
+  const navigate = useNavigate();
   const { trackEvent } = useAnalytics();
-  const { addIngredient, clearError, error, findIngredient, updateIngredient } = useIngredients();
+  const { addIngredient, clearError, findIngredient, updateIngredient } = useIngredients();
   const [form, setForm] = useState(defaultIngredientForm);
   const [loading, setLoading] = useState(Boolean(ingredientId));
+  const [loadError, setLoadError] = useState('');
+  const [reloadAttempt, setReloadAttempt] = useState(0);
   const [submitError, setSubmitError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const memoRef = useRef(null);
+  const activeRef = useRef(false);
+  const submittingRef = useRef(false);
   const isEditMode = Boolean(ingredientId);
+  const disabled = loading || Boolean(loadError) || submitting;
+
+  useLayoutEffect(() => {
+    activeRef.current = true;
+    return () => { activeRef.current = false; };
+  }, []);
 
   useEffect(() => {
     if (!memoRef.current) {
@@ -31,31 +48,39 @@ function IngredientFormPage() {
       return;
     }
 
+    let cancelled = false;
+    setLoading(true);
+    setLoadError('');
     const loadIngredient = async () => {
       try {
         const ingredient = await findIngredient(ingredientId);
+        if (cancelled) return;
 
         if (ingredient) {
-          setForm(ingredient);
+          setForm({ ...defaultIngredientForm, ...ingredient });
+        } else {
+          setLoadError('수정할 재료를 찾을 수 없어요. 목록을 확인하거나 다시 불러와 주세요.');
         }
+      } catch {
+        if (!cancelled) setLoadError('재료 정보를 불러오지 못했어요. 저장소 접근을 확인한 뒤 다시 불러와 주세요.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
-    loadIngredient();
-  }, [findIngredient, ingredientId]);
+    void loadIngredient();
+    return () => { cancelled = true; };
+  }, [findIngredient, ingredientId, reloadAttempt]);
 
   const handleChange = (event) => {
+    if (disabled || submittingRef.current || !activeRef.current) return;
     const { name, value, type, checked } = event.target;
 
     if (submitError) {
       setSubmitError('');
     }
 
-    if (error) {
-      clearError();
-    }
+    clearError();
 
     setForm((current) => ({
       ...current,
@@ -65,6 +90,8 @@ function IngredientFormPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (disabled || submittingRef.current || !activeRef.current || (isEditMode && form.id !== ingredientId)) return;
+    submittingRef.current = true;
     setSubmitError('');
     setSubmitting(true);
 
@@ -73,6 +100,7 @@ function IngredientFormPage() {
         await updateIngredient(form);
       } else {
         await addIngredient(form);
+        if (!activeRef.current) return;
         trackEvent('ingredient_created', {
           creation_method: 'manual',
           category: form.category,
@@ -86,11 +114,15 @@ function IngredientFormPage() {
         });
       }
 
+      if (!activeRef.current) return;
       navigate('/ingredients');
-    } catch (nextError) {
-      setSubmitError(nextError instanceof Error ? nextError.message : '\uC7AC\uB8CC\uB97C \uC800\uC7A5\uD558\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.');
+    } catch {
+      if (activeRef.current) setSubmitError('재료를 저장하지 못했어요. 입력한 내용은 유지돼요. 다시 저장해주세요.');
     } finally {
-      setSubmitting(false);
+      if (activeRef.current) {
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
     }
   };
 
@@ -109,12 +141,20 @@ function IngredientFormPage() {
         }
       />
 
-      {submitError || error ? (
-        <div className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">{submitError || error}</div>
+      {loadError || submitError ? (
+        <div className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">
+          <p role="alert">{loadError || submitError}</p>
+          {loadError ? (
+            <button type="button" className="btn-secondary mt-3" disabled={loading}
+              onClick={() => setReloadAttempt((current) => current + 1)}>
+              재료 다시 불러오기
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       <form className="card space-y-5" onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
+        <fieldset disabled={disabled} className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
           <section className="soft-panel space-y-4">
             <div>
               <p className="kicker">{'\uAE30\uBCF8 \uC815\uBCF4'}</p>
@@ -187,10 +227,10 @@ function IngredientFormPage() {
               </label>
             </div>
           </section>
-        </div>
+        </fieldset>
 
         <div className="flex flex-col gap-3 border-t border-white/70 pt-1 sm:flex-row sm:flex-wrap">
-          <button type="submit" className="btn-primary w-full sm:w-auto" disabled={loading || submitting}>
+          <button type="submit" className="btn-primary w-full sm:w-auto" disabled={disabled}>
             {loading
               ? '\uBD88\uB7EC\uC624\uB294 \uC911...'
               : submitting

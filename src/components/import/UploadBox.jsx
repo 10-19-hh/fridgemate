@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 const MAX_PREVIEW_DIMENSION = 1600;
 
-function UploadBox({ imageFile, fileName, disabled, onChange, onRunOcr }) {
+function UploadBox({ imageFile, fileName, disabled, fileDisabled = false, onChange, onRunOcr }) {
   const canvasRef = useRef(null);
   const [previewedFile, setPreviewedFile] = useState(null);
   const previewReady = Boolean(imageFile) && previewedFile === imageFile;
@@ -64,10 +64,10 @@ function UploadBox({ imageFile, fileName, disabled, onChange, onRunOcr }) {
             <span className="summary-chip">{'4. \uAC00\uC838\uC624\uAE30'}</span>
           </div>
 
-          <label className="flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-brand-100 bg-brand-50/40 px-4 py-6 text-center hover:border-brand-500 hover:bg-brand-50/70">
+          <label className="relative flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-brand-100 bg-brand-50/40 px-4 py-6 text-center hover:border-brand-500 hover:bg-brand-50/70 focus-within:ring-2 focus-within:ring-green-700 focus-within:ring-offset-2">
             <span className="text-sm font-semibold text-slate-800">{'\uC0AC\uC9C4 \uACE0\uB974\uAE30'}</span>
             <span className="mt-1 text-xs muted">{'PNG, JPG, WEBP · 최대 8MB · 총 1,200만 픽셀 이하'}</span>
-            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={onChange} />
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" disabled={fileDisabled} onChange={onChange} />
           </label>
 
           <div className="flex flex-wrap items-center gap-2.5">

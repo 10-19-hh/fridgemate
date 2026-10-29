@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { isOcrEnabled, isPublicSignupEnabled } from '../utils/backendConfig';
 
@@ -30,12 +30,12 @@ function Header() {
         <div className="app-header-frame mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-10">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0 flex-1">
-              <p className="kicker">오늘뭐먹지</p>
+              <p className="kicker">오늘뭐먹지 (FridgeMate)</p>
               <p className="mt-1 text-lg font-semibold text-slate-900 sm:text-[1.25rem]">
-                {'\uB0C9\uC7A5\uACE0 \uC815\uB9AC\uB97C \uBE60\uB974\uAC8C, \uC694\uB9AC \uC120\uD0DD\uC740 \uB354 \uC26C\uAC8C'}
+                저녁 식단부터 장보기·조리 기록까지
               </p>
               <p className="max-w-2xl text-sm leading-5.5 muted">
-                {'\uC7AC\uB8CC \uD604\uD669, \uC720\uD1B5\uAE30\uD55C, \uC7A5\uBCF4\uAE30 \uD544\uC694\uD55C \uD56D\uBAA9\uC744 \uD55C \uACF3\uC5D0\uC11C \uBCF4\uC138\uC694.'}
+                냉장고 재료를 확인하고, 이번 주에 먹을 메뉴와 준비할 재료를 정해보세요.
               </p>
             </div>
 
@@ -74,12 +74,13 @@ function Header() {
               const isActive = item.match(location.pathname);
 
               return (
-                <NavLink
+                <Link
                   key={item.to}
                   to={item.to}
+                  aria-current={isActive ? 'page' : undefined}
                   className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-2 text-sm font-medium ${
                     isActive
-                      ? 'bg-green-600 text-white shadow-sm'
+                      ? 'bg-green-700 text-white shadow-sm'
                       : 'text-stone-600 hover:bg-green-50 hover:text-green-700'
                   }`}
                 >
@@ -87,7 +88,7 @@ function Header() {
                     {item.icon}
                   </span>
                   <span>{item.shortLabel || item.label}</span>
-                </NavLink>
+                </Link>
               );
             })}
           </nav>

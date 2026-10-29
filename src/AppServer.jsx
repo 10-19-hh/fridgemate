@@ -11,6 +11,7 @@ import IngredientFormPage from './pages/IngredientFormPage';
 import IngredientsPage from './pages/IngredientsPage';
 import LoginPage from './pages/LoginPage';
 import MealPlanPage from './pages/MealPlanPage';
+import MealPlanPilotPage from './pages/MealPlanPilotPage';
 import NotFoundPage from './pages/NotFoundPage';
 import PrivacyPage from './pages/PrivacyPage';
 import PublicRecipePage from './pages/PublicRecipePage';
@@ -30,6 +31,7 @@ const pages = {
   IngredientsPage,
   LoginPage,
   MealPlanPage,
+  MealPlanPilotPage,
   NotFoundPage,
   PrivacyPage,
   PublicRecipePage,

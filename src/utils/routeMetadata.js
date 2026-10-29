@@ -14,8 +14,8 @@ const SITE_ORIGIN = 'https://xn--wh1bs8l5xa003adme.com';
 
 const PUBLIC_PAGE_METADATA = {
   '/': {
-    title: '오늘뭐먹지 | 냉장고 재료 기반 메뉴 추천',
-    description: '냉장고 재료와 유통기한을 관리하고, 지금 만들 수 있는 메뉴를 빠르게 추천받아 보세요.'
+    title: '오늘뭐먹지 (FridgeMate) | 주간 저녁 식단과 장보기',
+    description: '오늘뭐먹지(FridgeMate)에서 1~2인 주간 저녁 식단을 만들고, 냉장고 재료를 활용한 장보기와 실제 조리를 기록하세요. 가입과 재료 등록 없이 시작할 수 있습니다.'
   },
   '/recipes': {
     title: '냉장고 재료로 찾는 메뉴 추천 | 오늘뭐먹지',
@@ -23,7 +23,7 @@ const PUBLIC_PAGE_METADATA = {
   },
   '/about': {
     title: '서비스 소개 | 오늘뭐먹지',
-    description: '오늘뭐먹지가 냉장고 속 재료와 유통기한을 메뉴 선택으로 이어주는 방식과 운영 원칙을 소개합니다.'
+    description: '오늘뭐먹지(FridgeMate)의 주간 저녁 식단, 장보기, 실제 조리 기록 흐름과 재료·로컬 저장 원칙을 소개합니다. 가입 없이 첫 식단을 시작하세요.'
   },
   '/contact': {
     title: '문의 | 오늘뭐먹지',
@@ -44,6 +44,7 @@ export const PUBLIC_ROUTES = Object.freeze([
 
 const FUNCTIONAL_PATH_PATTERNS = [
   /^\/meal-plan$/,
+  /^\/pilot$/,
   /^\/ingredients(?:\/.*)?$/,
   /^\/import$/,
   /^\/login$/,
@@ -101,8 +102,8 @@ export function getRouteMetadata(pathname = '/') {
 
   if (FUNCTIONAL_PATH_PATTERNS.some((pattern) => pattern.test(pathname))) {
     return {
-      title: pathname === '/meal-plan' ? '우리 집 주간 식단 | 오늘뭐먹지' : '오늘뭐먹지',
-      description: pathname === '/meal-plan' ? '냉장고 재료와 취향으로 한 주 저녁 식단을 만들고 이 기기에 저장하세요.' : '오늘뭐먹지의 냉장고 관리 기능 화면입니다.',
+      title: pathname === '/pilot' ? '식단 파일럿 참여 | 오늘뭐먹지' : pathname === '/meal-plan' ? '우리 집 주간 식단 | 오늘뭐먹지' : '오늘뭐먹지',
+      description: pathname === '/pilot' ? '이 기기의 식단 파일럿 참여와 기록 내보내기, 철회를 관리하세요.' : pathname === '/meal-plan' ? '냉장고 재료와 취향으로 한 주 저녁 식단을 만들고 이 기기에 저장하세요.' : '오늘뭐먹지의 냉장고 관리 기능 화면입니다.',
       canonical: `${SITE_ORIGIN}${pathname}`,
       indexable: false,
       notFound: false

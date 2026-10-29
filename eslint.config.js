@@ -22,6 +22,7 @@ export default [
     ignores: [
       'coverage/**',
       'dist/**',
+      'dist-pilot/**',
       '.wrangler/**',
       'node_modules/**',
       'playwright-report/**',

@@ -53,7 +53,9 @@ function buildSectionStats({ loading, readyRecommendations, buyOneRecommendation
 }
 
 export function useRecipesPageModel() {
-  const { pantryStaples, pantryOwnership, pantrySummary, cyclePantryStatus } = usePantryStaples();
+  const { pantryStaples, pantryOwnership, pantrySummary, cyclePantryStatus, syncError: pantryError,
+    saving: pantrySaving, storageReady: pantryStorageReady, canRetrySave: pantryCanRetrySave,
+    reloadPantryOwnership, retryPantrySave } = usePantryStaples();
   const ownedPantryItems = useMemo(
     () =>
       pantryStaples
@@ -61,7 +63,7 @@ export function useRecipesPageModel() {
         .map((staple) => staple.name),
     [pantryOwnership, pantryStaples]
   );
-  const { recommendations, loading, ingredients } = useLocalRecommendations(ownedPantryItems);
+  const { recommendations, loading, ingredients, readError, loadIngredients } = useLocalRecommendations(ownedPantryItems);
   const summary = useMemo(() => getDashboardSummary(ingredients), [ingredients]);
   const missingBasicIngredients = useMemo(() => getMissingBasicIngredients(ingredients), [ingredients]);
   const activeIngredientCount = useMemo(() => ingredients.filter((ingredient) => !ingredient.consumed).length, [ingredients]);
@@ -102,8 +104,16 @@ export function useRecipesPageModel() {
     pantryOwnership,
     pantrySummary,
     cyclePantryStatus,
+    pantryError,
+    pantrySaving,
+    pantryStorageReady,
+    pantryCanRetrySave,
+    reloadPantryOwnership,
+    retryPantrySave,
     ownedPantryItems,
     loading,
+    readError,
+    loadIngredients,
     ingredients,
     summary,
     missingBasicIngredients,

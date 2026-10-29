@@ -1,3 +1,5 @@
+import { isLocalPilotBuild } from './pilotMode.js';
+
 function normalizeUrl(value) {
   return String(value || '').trim().replace(/\/$/, '');
 }
@@ -13,6 +15,7 @@ function getBrowserHostname() {
 }
 
 export function resolveApiBaseUrl(configuredUrl, hostname = getBrowserHostname()) {
+  if (isLocalPilotBuild()) return '';
   const normalizedHostname = String(hostname || '').trim().toLowerCase();
 
   if (normalizedHostname.endsWith('.vercel.app')) {

@@ -3,22 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import HomePage from '../HomePage.jsx';
 
-const mocks = vi.hoisted(() => ({ recipes: [], trackEvent: vi.fn() }));
+const mocks = vi.hoisted(() => ({ recipes: [], trackEvent: vi.fn(), total: 2, loading: false, ocrEnabled: true }));
 
 vi.mock('../../hooks/useHomePageModel', () => ({
   useHomePageModel: () => ({
-    loading: false, summary: { total: 2 }, topRecommendations: mocks.recipes,
+    loading: mocks.loading, summary: { total: mocks.total }, topRecommendations: mocks.recipes,
     upcomingItems: [{ id: 'tofu', name: '두부' }], urgentCount: 0
   })
 }));
 vi.mock('../../hooks/useAnalytics', () => ({ useAnalytics: () => ({ trackEvent: mocks.trackEvent }) }));
 vi.mock('../../hooks/useMenuDecision', () => ({ useMenuDecision: () => ({ decision: null }) }));
+vi.mock('../../utils/backendConfig', () => ({ isOcrEnabled: () => mocks.ocrEnabled }));
 vi.mock('../../components/PublicRecipeExplorer', () => ({ default: () => <p>공개 레시피 탐색</p> }));
 vi.mock('../../components/ads/AdSenseSlot', () => ({ default: () => null }));
 
 afterEach(cleanup);
 beforeEach(() => {
   mocks.recipes = [];
+  mocks.total = 2;
+  mocks.loading = false;
+  mocks.ocrEnabled = true;
   mocks.trackEvent.mockClear();
 });
 
@@ -29,6 +33,34 @@ function renderHome() {
 function preview(name) {
   return within(screen.getByText(name).closest('article'));
 }
+
+describe('weekly planning as the first home action', () => {
+  it.each([
+    { name: 'unregistered inventory', total: 0, loading: false },
+    { name: 'partially registered inventory', total: 2, loading: false },
+    { name: 'inventory still loading', total: 0, loading: true },
+  ])('offers planning before optional inventory entry for $name', ({ total, loading }) => {
+    mocks.total = total; mocks.loading = loading;
+    renderHome();
+    const header = within(screen.getByRole('heading', { level: 1 }).closest('section'));
+    const start = header.getByRole('link', { name: '이번 주 식단 만들기', exact: true });
+    expect(start).toHaveAttribute('href', '/meal-plan');
+    expect(header.getAllByRole('link')[0]).toBe(start);
+    expect(header.getByRole('link', { name: '재료 추가', exact: true })).toHaveAttribute('href', '/ingredients/new');
+    expect(header.getByRole('link', { name: '사진 가져오기', exact: true })).toHaveAttribute('href', '/import');
+    expect(header.getByText(/재료 등록은.*건너뛸 수/)).toBeInTheDocument();
+    expect(header.queryByRole('link', { name: /로그인|가입/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps planning and direct entry available when OCR is disabled', () => {
+    mocks.total = 0; mocks.ocrEnabled = false;
+    renderHome();
+    const header = within(screen.getByRole('heading', { level: 1 }).closest('section'));
+    expect(header.getByRole('link', { name: '이번 주 식단 만들기', exact: true })).toHaveAttribute('href', '/meal-plan');
+    expect(header.getByRole('link', { name: '재료 추가', exact: true })).toHaveAttribute('href', '/ingredients/new');
+    expect(header.queryByRole('link', { name: '사진 가져오기', exact: true })).not.toBeInTheDocument();
+  });
+});
 
 describe('home recommendation previews', () => {
   it('only promises one addition when groups and seasonings are satisfied, and shows every missing condition', () => {

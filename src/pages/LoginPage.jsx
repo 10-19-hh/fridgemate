@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import { useAnalytics } from '../hooks/useAnalytics';
@@ -10,7 +10,7 @@ const defaultForm = {
   password: ''
 };
 
-function LoginPage() {
+function LoginSession() {
   const location = useLocation();
   const navigate = useNavigate();
   const { backendEnabled, error: authError, isAuthenticated, loading, login } = useAuth();
@@ -18,10 +18,19 @@ function LoginPage() {
   const [form, setForm] = useState(defaultForm);
   const [formError, setFormError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const pending = useRef(false);
+  const mounted = useRef(false);
   const visibleError = formError || authError;
   const publicSignupEnabled = isPublicSignupEnabled();
 
-  if (isAuthenticated) {
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // The active submit owns its completion and original destination. A provider
+  // session update must not unmount it before that acknowledgement is handled.
+  if (isAuthenticated && !submitting) {
     return <Navigate replace to="/account" />;
   }
 
@@ -35,20 +44,34 @@ function LoginPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!mounted.current || pending.current || loading || !backendEnabled || isAuthenticated) return;
+    const requestPath = window.location.pathname;
+    const requestHistoryKey = window.history.state?.key;
+    const isCurrentPage = () => mounted.current && window.location.pathname === requestPath
+      && window.history.state?.key === requestHistoryKey;
+    pending.current = true;
     setSubmitting(true);
     setFormError('');
+    let completed = false;
 
     try {
       await login(form);
+      if (!isCurrentPage()) return;
       trackEvent('login_completed', {
         restored_session: false,
         source_screen: 'login'
       });
       navigate(location.state?.from?.pathname || '/account', { replace: true });
+      completed = true;
     } catch (nextError) {
-      setFormError(nextError.message || '\uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC5B4\uC694.');
+      if (isCurrentPage()) setFormError(nextError.message || '\uB85C\uADF8\uC778\uC5D0 \uC2E4\uD328\uD588\uC5B4\uC694.');
     } finally {
-      setSubmitting(false);
+      // Keep the success redirect in control while the router commits it.
+      // History can move before a suspended destination unmounts this page.
+      if (!completed && isCurrentPage()) {
+        pending.current = false;
+        setSubmitting(false);
+      }
     }
   };
 
@@ -69,7 +92,7 @@ function LoginPage() {
       ) : null}
 
       {visibleError ? (
-        <div className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">{visibleError}</div>
+        <div role="alert" className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">{visibleError}</div>
       ) : null}
 
       <form className="card max-w-xl space-y-4" onSubmit={handleSubmit}>
@@ -80,12 +103,12 @@ function LoginPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-1.5 text-sm font-medium text-slate-700 md:col-span-2">
             {'\uC774\uBA54\uC77C'}
-            <input required name="email" type="email" value={form.email} onChange={handleChange} />
+            <input required autoComplete="username" spellCheck={false} name="email" type="email" value={form.email} onChange={handleChange} />
           </label>
 
           <label className="space-y-1.5 text-sm font-medium text-slate-700 md:col-span-2">
             {'\uBE44\uBC00\uBC88\uD638'}
-            <input required name="password" type="password" value={form.password} onChange={handleChange} />
+            <input required autoComplete="current-password" name="password" type="password" value={form.password} onChange={handleChange} />
           </label>
         </div>
 
@@ -102,6 +125,11 @@ function LoginPage() {
       </form>
     </div>
   );
+}
+
+function LoginPage() {
+  const location = useLocation();
+  return <LoginSession key={location.key} />;
 }
 
 export default LoginPage;

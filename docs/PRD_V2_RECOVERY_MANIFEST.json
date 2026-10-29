@@ -1,0 +1,264 @@
+{
+  "source": "/private/tmp/fridgemate-prd-v2-b1-Lba78Azy",
+  "target": "/Users/lee/fridgemate/.worktrees/prd-v2-recovered-20260919",
+  "base": "986051a6693a20e305adaff355530c5a2779774c",
+  "recoveredAt": "2026-09-19T04:14:34.618Z",
+  "copiedFiles": [
+    {
+      "path": "README.md",
+      "sha256": "de3df3dfa908c9ce687e216f843900257cc54c848c5aa6f142b106d557b4003f"
+    },
+    {
+      "path": "CHANGELOG.md",
+      "sha256": "789986edcf2d97cb62a4b868aa8c26463bead5453971fcee11c163bc5d0f5935"
+    },
+    {
+      "path": "playwright.config.js",
+      "sha256": "4b5628c4f17f1b0ded9279ff609bc5efb312a2bb32b8129dee5e9ff062accc94"
+    },
+    {
+      "path": "src/components/InventoryQuantityReview.jsx",
+      "sha256": "d1f23c81dc4d52ffb94f9fa7cbbf951e8cda9163511beea3bea71173de5936a1"
+    },
+    {
+      "path": "src/components/MealPlanShoppingPreview.jsx",
+      "sha256": "625a4439f13ebe18e807a7457754816b1e4707b4e959f9cba98bf07497d4e32e"
+    },
+    {
+      "path": "src/components/MealQuantityDetails.jsx",
+      "sha256": "c0073ee6a67996a2c265e3869b1f6f5dc4e20b371d153452fa0afdd68e481e3b"
+    },
+    {
+      "path": "src/components/PurchaseReceiptForm.jsx",
+      "sha256": "881b641ce2fc0227b849dfd82b0bff03e8c726d7a9df06ba9deee0beaed0dab4"
+    },
+    {
+      "path": "src/components/ShoppingNotesPanel.jsx",
+      "sha256": "584bfacc86f74e630d61b10991182c28bc59b048a1b6656ec8502c5c3cc9057d"
+    },
+    {
+      "path": "src/components/__tests__/InventoryQuantityReview.test.jsx",
+      "sha256": "0d8364cf743693fd44833425a0bd94959510558eec3d5dfb0354f9658f4e516b"
+    },
+    {
+      "path": "src/components/__tests__/MealPlanShoppingPreview.test.jsx",
+      "sha256": "7fedb619f1d2a53fe9032e0fb3966ca3af5d67cd6f0ff57cfd24339a4862c1db"
+    },
+    {
+      "path": "src/components/__tests__/MealQuantityDetails.test.jsx",
+      "sha256": "8776ca1f345973eb2999d0a4b6a901c83e71b6dd5fcf5422b7a4e4df9d2a5e32"
+    },
+    {
+      "path": "src/components/__tests__/ShoppingNotesPanel.pages.test.jsx",
+      "sha256": "2eb16362af18044bb22d9043c8ca41cd1a1467c44c24e73aa451d9f127b30330"
+    },
+    {
+      "path": "src/components/__tests__/ShoppingNotesPanel.persistence.test.jsx",
+      "sha256": "50a9148665b5c317001d7c2da1d4e2d8e692a7674f67886ee29affa3176e2469"
+    },
+    {
+      "path": "src/components/__tests__/ShoppingNotesPanel.receiving.test.jsx",
+      "sha256": "db845cae9165754a648ad6acc891e9206489d16171f2f7af8b2f9f464a897b87"
+    },
+    {
+      "path": "src/components/__tests__/ShoppingNotesPanel.test.jsx",
+      "sha256": "4f5a3bbb90586f15cd2e83a1de23ff0315c230836aa82d738d5ddef41e67fd10"
+    },
+    {
+      "path": "src/db/__tests__/indexedDB.test.js",
+      "sha256": "2011c5d1168ea2bcc293830ab6dcc67640b6045102c851ff54074af5bc2a414b"
+    },
+    {
+      "path": "src/db/indexedDB.js",
+      "sha256": "daf0954228a62cca3447509b8f4934b32e98c606c7ede21af95e3acde50922b2"
+    },
+    {
+      "path": "src/features/auth/__tests__/authSessionService.test.js",
+      "sha256": "ff853aff379a5f73d37aa5b8e8916d98b42b8be68f0c0bb6e7132980c4233636"
+    },
+    {
+      "path": "src/features/auth/authSessionService.js",
+      "sha256": "9d721435eb613769a816a9e65e60f1d63c6e16191793a7fd6bb857f5b041a833"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/inventoryConsumptionDomain.test.js",
+      "sha256": "c837290e083440299612a7e498fd442e5818ff28fe0156113afaccab304faf2e"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/inventoryQuantityDomain.test.js",
+      "sha256": "f702e4a7bdb036a1113400ed21281c81fdc3b925ad3610e25ebdc76788e6569a"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/inventoryQuantityRepository.test.js",
+      "sha256": "4c9cdd66647722dfe13033f6eeffcfe3018aba2bac4ccecca666dca50f19e371"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/mealPlanAllocation.test.js",
+      "sha256": "a25dd38bf43af5a4818cb01641e40924add7cb1cf6d9bb52873f72d83622f774"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/mealPlanDomain.test.js",
+      "sha256": "3958d186ea0bc323871afdfc9e11ee83ad7c7c2282d8e5ca239d13811dd379ce"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/mealPlanRepository.test.js",
+      "sha256": "3ec0ca80544c8c6ea22bb355386f1c0d1ff7d08c11e1d3fa7c6cb5051af08c63"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/mealQuantityDomain.test.js",
+      "sha256": "067179beefbef73b8d91bdb5e131c2635b7ece08b20da101946e188a497929b9"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/reviewedDinnerAllocation.test.js",
+      "sha256": "09b47b65661e69a247cac91744a6fab6059897d207cfbb9face0424e1e946a7b"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/reviewedDinnerCatalog.test.js",
+      "sha256": "7f0622453e2126f0117f30056f0216f4df956ca13b72eb98883f4b316af42b01"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/reviewedDinnerExpansion.test.js",
+      "sha256": "fc57b37dc37ff87bddfdc508d4280d8ea3eda0e08570334ec83c5cd9a4285800"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/reviewedDinnerGeneration.test.js",
+      "sha256": "2ceb8dc946b375c537812d8de4629fcffdfc71f41b910fa453c51bb470381724"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/reviewedDinnerPersistence.test.js",
+      "sha256": "e45b8e24f83dc4a59f060f4755d4e1f1c153510645f20519b49e16c15c0a0c44"
+    },
+    {
+      "path": "src/features/mealPlans/__tests__/reviewedRecipeCatalog.test.js",
+      "sha256": "c4e006d165ce9e523e1053075a0caff1cf7f8943fa966285f649e51ece10efff"
+    },
+    {
+      "path": "src/features/mealPlans/inventoryConsumptionDomain.js",
+      "sha256": "fb0ef166c9ca9626ab8d3eb1a0155f25ac0893f08d535666f24640b471159cf4"
+    },
+    {
+      "path": "src/features/mealPlans/inventoryQuantityDomain.js",
+      "sha256": "1470284e74de54779af2cec68296d5fb8a2eff026957d4b6edfe819be5b95fd5"
+    },
+    {
+      "path": "src/features/mealPlans/inventoryQuantityRepository.js",
+      "sha256": "f1af48f493b807e69c047709ac3d662903b9eaed893b857281b9951485d71003"
+    },
+    {
+      "path": "src/features/mealPlans/mealPlanAllocation.js",
+      "sha256": "7b6d6549c1419a0517903a6dc067cbac2bda5c35b3c887f25cdaeb34f9424c68"
+    },
+    {
+      "path": "src/features/mealPlans/mealPlanCatalog.js",
+      "sha256": "0a3b5045c1049f4cb144c618b743dfad80678f2b96f5dc07038fdcfbbfdb0fef"
+    },
+    {
+      "path": "src/features/mealPlans/mealPlanDomain.js",
+      "sha256": "ff9a5cd2914fbfeec5ed0bc03e3eaf51be8c31ac6c2d67787aa06164f10abac0"
+    },
+    {
+      "path": "src/features/mealPlans/mealPlanRepository.js",
+      "sha256": "a079c657f18ca40b499d7b620531e65aa2846f7c78a5f890be6e4243d486f44f"
+    },
+    {
+      "path": "src/features/mealPlans/mealQuantityDomain.js",
+      "sha256": "2a71caac00ca1b49e9a950ab96134ab524d13a0a86480367f73b9a6fd1a33aac"
+    },
+    {
+      "path": "src/features/mealPlans/reviewedDinnerCatalog.js",
+      "sha256": "e0cf4c87f7d2417f5ec14728b49b9d30e237cebf2a53e32a5164973a44197ca3"
+    },
+    {
+      "path": "src/features/mealPlans/reviewedRecipeCatalog.js",
+      "sha256": "cb7ffc3ef24b9bab71e46d111b279c6ff37c932b6c7bdbb1f24c116e4af2faba"
+    },
+    {
+      "path": "src/features/mealPlans/reviewedRecipeSources.json",
+      "sha256": "4947c705f81f012462e431b4705bb6127109e51c3ac87ca0027933e8486fd891"
+    },
+    {
+      "path": "src/features/shopping/__tests__/inventoryReceipt.test.js",
+      "sha256": "3fcc03ec502725631567bcee1109bb901f089b9f5c12d94871fdfc18b6f34622"
+    },
+    {
+      "path": "src/features/shopping/__tests__/shoppingRepository.test.js",
+      "sha256": "62f52b4b303ceafa15391b31ca954d34265a3a56a4a0cf88dc69b7f1693f45c8"
+    },
+    {
+      "path": "src/features/shopping/__tests__/shoppingSourceBoundaries.test.js",
+      "sha256": "4b7c3a1a0fe84d993819e5e51d31cce35493bc1660b436455e09d907907b2ad6"
+    },
+    {
+      "path": "src/features/shopping/shoppingRepository.js",
+      "sha256": "e494af9417a36bc7623bbce30b5a97e94b151575fcc630717d512cfc7fa10d4f"
+    },
+    {
+      "path": "src/hooks/__tests__/useMealPlan.test.js",
+      "sha256": "3efc1453e446c890250e4e474e0d6d02281bf14d00ddc75837b950d8fc787fc7"
+    },
+    {
+      "path": "src/hooks/useMealPlan.js",
+      "sha256": "09d21c97a4c8b9581d3947e7bf599788011349422d95b81ab080b01c77b697d6"
+    },
+    {
+      "path": "src/pages/IngredientsPage.jsx",
+      "sha256": "98cf921694082096cca996e0d8f0afcd86c851b517d928098cd801eb5d0c4d02"
+    },
+    {
+      "path": "src/pages/MealPlanPage.jsx",
+      "sha256": "b2fd2fa3988875a38ee6dbfd22f9876a49946f93486fada2122433df111efd69"
+    },
+    {
+      "path": "src/pages/__tests__/MealPlanPage.test.jsx",
+      "sha256": "90d41754a457337db5957f96b22327b472ac9266bcc7ae7147353cd0bfbf2cce"
+    },
+    {
+      "path": "docs/PRD_V2_ALLOCATION_PREVIEW.md",
+      "sha256": "a189b0780c1faaabc156792854e809a46530e36cd489e790c510497ca6879d26"
+    },
+    {
+      "path": "docs/PRD_V2_DINNER_EXPANSION.md",
+      "sha256": "0b80c8c80a215e8ded63ae79ecb62cd2d4e1b2305c677307bc735e3f2af23159"
+    },
+    {
+      "path": "docs/PRD_V2_INVENTORY_QUANTITY.md",
+      "sha256": "219bc2b4fde16a41e32ee94ab5dde85ffc96795eb934bd5b3376c201efd622b6"
+    },
+    {
+      "path": "docs/PRD_V2_PLAN_LIFECYCLE.md",
+      "sha256": "01fac1332a12f3f1b06e37cc9cd52655208a25aa23c3a1f42c344ace4941eb7b"
+    },
+    {
+      "path": "docs/PRD_V2_PROGRESS.md",
+      "sha256": "57dee2eead673ea0b453926c21c448d5365169a7521df5fdc2a5f0cedc791e38"
+    },
+    {
+      "path": "docs/PRD_V2_PURCHASE_RECEIVING.md",
+      "sha256": "737b55cf3ac5691b17261f30470a9de727964d5c3c7b6da3d578d30d7a16c47a"
+    },
+    {
+      "path": "docs/PRD_V2_QUANTITY_CONTRACT.md",
+      "sha256": "f9f68f75924cd31ec82eb2720d8fb30be3eb3a1c5736975b7b7afb2ad7a83ecd"
+    },
+    {
+      "path": "docs/PRD_V2_REVIEWED_DINNERS.md",
+      "sha256": "0d1f1e7641d38a940a7bd3d7870f6b961b9e11970e9aae83316378efe5e93d69"
+    },
+    {
+      "path": "docs/PRD_V2_SHOPPING_NOTES.md",
+      "sha256": "2c6f552a687405d137ddd35b500133bcb668a468d9856d29c0da0f622083bd3a"
+    },
+    {
+      "path": "e2e/meal-plan-account.spec.js",
+      "sha256": "90fe2c35cfacbbbf91f952f95ff5813f5ea89b67350887f8966a6bf6219c2836"
+    },
+    {
+      "path": "e2e/meal-plan.spec.js",
+      "sha256": "092c74d26771319e477eef1fe31c0a8e24e0bde0069a382cd01dcd351f07c7a3"
+    },
+    {
+      "path": "e2e/purchase-receiving.spec.js",
+      "sha256": "3521bc8e4830a07fe3e4d275af36a8687b64f24dc9066f81a18f4edee6740be8"
+    }
+  ]
+}

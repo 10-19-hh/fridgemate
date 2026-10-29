@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
 import { useAnalytics } from '../hooks/useAnalytics';
 import { useAuth } from '../hooks/useAuth';
@@ -10,16 +10,24 @@ const defaultForm = {
   password: ''
 };
 
-function SignupPage() {
+function SignupSession() {
   const navigate = useNavigate();
   const { backendEnabled, isAuthenticated, loading, signup } = useAuth();
   const { trackEvent } = useAnalytics();
   const [form, setForm] = useState(defaultForm);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const pending = useRef(false);
+  const mounted = useRef(false);
   const publicSignupEnabled = isPublicSignupEnabled();
 
-  if (isAuthenticated) {
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // Let an active submit finish its feedback before the authenticated redirect.
+  if (isAuthenticated && !submitting) {
     return <Navigate replace to="/account" />;
   }
 
@@ -33,19 +41,31 @@ function SignupPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (!mounted.current || pending.current || loading || !backendEnabled || !publicSignupEnabled || isAuthenticated) return;
+    const requestPath = window.location.pathname;
+    const requestHistoryKey = window.history.state?.key;
+    const isCurrentPage = () => mounted.current && window.location.pathname === requestPath
+      && window.history.state?.key === requestHistoryKey;
+    pending.current = true;
     setSubmitting(true);
     setError('');
+    let completed = false;
 
     try {
       await signup(form);
+      if (!isCurrentPage()) return;
       trackEvent('signup_completed', {
         source_screen: 'signup'
       });
       navigate('/account', { replace: true });
+      completed = true;
     } catch (nextError) {
-      setError(nextError.message || '\uD68C\uC6D0\uAC00\uC785\uC5D0 \uC2E4\uD328\uD588\uC5B4\uC694.');
+      if (isCurrentPage()) setError(nextError.message || '\uD68C\uC6D0\uAC00\uC785\uC5D0 \uC2E4\uD328\uD588\uC5B4\uC694.');
     } finally {
-      setSubmitting(false);
+      if (!completed && isCurrentPage()) {
+        pending.current = false;
+        setSubmitting(false);
+      }
     }
   };
 
@@ -71,7 +91,7 @@ function SignupPage() {
         </div>
       ) : null}
 
-      {error ? <div className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">{error}</div> : null}
+      {error ? <div role="alert" className="card border border-rose-200 bg-rose-50 text-sm text-rose-700">{error}</div> : null}
 
       {publicSignupEnabled ? <form className="card max-w-xl space-y-4" onSubmit={handleSubmit}>
         <div className="flex flex-wrap gap-2">
@@ -81,12 +101,12 @@ function SignupPage() {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="space-y-1.5 text-sm font-medium text-slate-700 md:col-span-2">
             {'\uC774\uBA54\uC77C'}
-            <input required name="email" type="email" value={form.email} onChange={handleChange} />
+            <input required autoComplete="username" spellCheck={false} name="email" type="email" value={form.email} onChange={handleChange} />
           </label>
 
           <label className="space-y-1.5 text-sm font-medium text-slate-700 md:col-span-2">
             {'\uBE44\uBC00\uBC88\uD638'}
-            <input required minLength={8} maxLength={128} name="password" type="password" value={form.password} onChange={handleChange} />
+            <input required autoComplete="new-password" minLength={8} maxLength={128} name="password" type="password" value={form.password} onChange={handleChange} />
             <span className="block text-xs font-normal text-slate-500">
               {'8\uC790 \uC774\uC0C1, \uD2B9\uC218\uBB38\uC790 \uD3EC\uD568, \uC774\uBA54\uC77C \uC77C\uBD80\uB098 \uC26C\uC6B4 \uD328\uD134\uC744 \uD53C\uD55C \uBE44\uBC00\uBC88\uD638\uB97C \uC0AC\uC6A9\uD574\uC8FC\uC138\uC694.'}
             </span>
@@ -104,6 +124,11 @@ function SignupPage() {
       </form> : null}
     </div>
   );
+}
+
+function SignupPage() {
+  const location = useLocation();
+  return <SignupSession key={location.key} />;
 }
 
 export default SignupPage;

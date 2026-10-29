@@ -1,42 +1,70 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ANALYTICS_CONSENT_OPEN_EVENT,
-  ANALYTICS_CONSENT_UPDATED_EVENT,
   getAnalyticsConsent,
-  setAnalyticsConsent
+  setAnalyticsConsent,
+  subscribeToAnalyticsConsent
 } from '../utils/analyticsConsent';
 import { disableGoogleAnalytics, initializeGoogleAnalytics } from '../utils/googleAnalytics';
-
-function subscribeToConsent(callback) {
-  window.addEventListener(ANALYTICS_CONSENT_UPDATED_EVENT, callback);
-  return () => window.removeEventListener(ANALYTICS_CONSENT_UPDATED_EVENT, callback);
-}
 
 function getConsentSnapshot() {
   return getAnalyticsConsent() || 'unset';
 }
 
 function AnalyticsConsentBanner() {
-  const choice = useSyncExternalStore(subscribeToConsent, getConsentSnapshot, () => 'loading');
+  const choice = useSyncExternalStore(subscribeToAnalyticsConsent, getConsentSnapshot, () => 'loading');
   const [settingsRequested, setSettingsRequested] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+  const panelRef = useRef(null);
+  const triggerRef = useRef(null);
+  const focusOnOpen = useRef(false);
   const isOpen = choice === 'unset' || settingsRequested;
 
   useEffect(() => {
     if (choice === 'granted') {
       initializeGoogleAnalytics();
+    } else {
+      disableGoogleAnalytics();
     }
   }, [choice]);
 
   useEffect(() => {
-    const handleOpen = () => setSettingsRequested(true);
+    const handleOpen = () => {
+      if (!panelRef.current?.contains(document.activeElement)) triggerRef.current = document.activeElement;
+      focusOnOpen.current = !panelRef.current;
+      setSettingsRequested(true);
+      panelRef.current?.focus();
+    };
     window.addEventListener(ANALYTICS_CONSENT_OPEN_EVENT, handleOpen);
     return () => window.removeEventListener(ANALYTICS_CONSENT_OPEN_EVENT, handleOpen);
   }, []);
 
+  useEffect(() => {
+    if (settingsRequested && focusOnOpen.current) {
+      focusOnOpen.current = false;
+      panelRef.current?.focus();
+    }
+  }, [settingsRequested]);
+
   const saveChoice = (value) => {
-    setAnalyticsConsent(value);
+    const restoreFocus = panelRef.current?.contains(document.activeElement);
+    const savedChoice = setAnalyticsConsent(value);
+    if (savedChoice !== value) {
+      setSaveError(true);
+      setSettingsRequested(true);
+      disableGoogleAnalytics();
+      return;
+    }
+
+    setSaveError(false);
     setSettingsRequested(false);
+    if (restoreFocus) {
+      const trigger = triggerRef.current;
+      const target = trigger?.isConnected && trigger !== document.body ? trigger : document.getElementById('main-content');
+      target?.focus();
+    }
+    triggerRef.current = null;
 
     if (value === 'granted') {
       initializeGoogleAnalytics();
@@ -49,9 +77,11 @@ function AnalyticsConsentBanner() {
 
   return (
     <section
+      ref={panelRef}
+      tabIndex={-1}
       aria-labelledby="analytics-consent-title"
       aria-describedby="analytics-consent-description"
-      className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-2xl rounded-lg border border-slate-300 bg-white p-4 shadow-2xl sm:bottom-5 sm:p-5"
+      className="mx-auto my-5 w-[calc(100%-1.5rem)] max-w-2xl scroll-mt-72 rounded-lg border border-slate-300 bg-white p-4 shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-green-700 sm:p-5"
       role="dialog"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -71,6 +101,13 @@ function AnalyticsConsentBanner() {
           {choice === 'granted' || choice === 'denied' ? (
             <p className="mt-2 text-xs font-medium text-slate-500">
               현재 설정: {choice === 'granted' ? '이용 분석 허용' : '필수 기능만 사용'}
+            </p>
+          ) : null}
+          {saveError ? (
+            <p className="mt-2 text-sm text-red-700" role="alert">
+              선택을 저장하거나 이전 분석 정보를 정리하지 못했습니다. 현재 탭에서는 분석을 중지했습니다.
+              다른 탭이나 다시 연 페이지에는 이전 설정이 남아 있을 수 있으니 브라우저 저장소 설정을
+              확인한 뒤 다시 선택해 주세요.
             </p>
           ) : null}
         </div>

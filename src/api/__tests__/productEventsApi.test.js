@@ -10,7 +10,8 @@ vi.mock('../apiClient', () => ({
   requestJson: requestJsonMock
 }));
 
-vi.mock('../../utils/analyticsConsent', () => ({
+vi.mock('../../utils/analyticsConsent', async (importOriginal) => ({
+  ...await importOriginal(),
   getAnalyticsConsent: analyticsConsentMock
 }));
 

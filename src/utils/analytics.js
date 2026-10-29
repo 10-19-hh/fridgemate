@@ -34,7 +34,11 @@ function getStorage(type) {
     return null;
   }
 
-  return window[type];
+  try {
+    return window[type];
+  } catch {
+    return null;
+  }
 }
 
 function createId() {
@@ -48,20 +52,19 @@ function getOrCreateStoredValue(key, storageType) {
 
   const storage = getStorage(storageType);
 
-  if (!storage) {
-    return createId();
+  if (!storage) return null;
+
+  try {
+    const existingValue = storage.getItem(key);
+    if (existingValue) return existingValue;
+
+    const nextValue = createId();
+    if (!nextValue) return null;
+    storage.setItem(key, nextValue);
+    return nextValue;
+  } catch {
+    return null;
   }
-
-  const existingValue = storage.getItem(key);
-
-  if (existingValue) {
-    return existingValue;
-  }
-
-  const nextValue = createId();
-  if (!nextValue) return null;
-  storage.setItem(key, nextValue);
-  return nextValue;
 }
 
 export function getAnonymousAnalyticsId() {
@@ -75,7 +78,11 @@ export function getAnalyticsSessionId() {
 export function hasTrackedSessionStarted() {
   if (getAnalyticsConsent() !== 'granted') return false;
   const storage = getStorage('sessionStorage');
-  return storage?.getItem(ANALYTICS_SESSION_STARTED_STORAGE_KEY) === 'true';
+  try {
+    return storage?.getItem(ANALYTICS_SESSION_STARTED_STORAGE_KEY) === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export function markSessionStartedTracked() {
@@ -86,7 +93,11 @@ export function markSessionStartedTracked() {
     return;
   }
 
-  storage.setItem(ANALYTICS_SESSION_STARTED_STORAGE_KEY, 'true');
+  try {
+    storage.setItem(ANALYTICS_SESSION_STARTED_STORAGE_KEY, 'true');
+  } catch {
+    // Optional analytics storage must not interrupt the user's current action.
+  }
 }
 
 export function getDeviceType() {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import EmptyState from '../components/EmptyState';
+import InventoryReadError from '../components/InventoryReadError';
 import PublicRecipeExplorer from '../components/PublicRecipeExplorer';
 import PageHeader from '../components/PageHeader';
 import AdSenseSlot from '../components/ads/AdSenseSlot';
@@ -70,7 +71,7 @@ function HomePage() {
   const ocrEnabled = isOcrEnabled();
   const { trackEvent } = useAnalytics();
   const lastViewSignatureRef = useRef('');
-  const { loading, summary, topRecommendations, upcomingItems, urgentCount } = useHomePageModel();
+  const { loading, readError, loadIngredients, summary, topRecommendations, upcomingItems, urgentCount } = useHomePageModel();
   const {
     cancelMenu,
     completeMenu,
@@ -80,8 +81,8 @@ function HomePage() {
     retrySync,
     syncing: menuDecisionSyncing
   } = useMenuDecision();
-  const showDashboard = !loading && summary.total > 0;
-  const isEmptyDashboard = !loading && summary.total === 0 && urgentCount === 0 && topRecommendations.length === 0;
+  const showDashboard = !loading && !readError && summary.total > 0;
+  const isEmptyDashboard = !loading && !readError && summary.total === 0 && urgentCount === 0 && topRecommendations.length === 0;
   const summaryItems = [
     {
       label: '\uC804\uCCB4 \uC7AC\uB8CC',
@@ -101,7 +102,7 @@ function HomePage() {
   ];
 
   useEffect(() => {
-    if (loading) {
+    if (loading || readError) {
       return;
     }
 
@@ -120,27 +121,32 @@ function HomePage() {
       buy_one_more_count: 0,
       use_soon_count: 0
     });
-  }, [loading, summary.total, topRecommendations.length, trackEvent, urgentCount]);
+  }, [loading, readError, summary.total, topRecommendations.length, trackEvent, urgentCount]);
 
   return (
     <div className="section-shell mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-10">
       <PageHeader
-        eyebrow={showDashboard ? '내 냉장고' : '오늘 한 끼 고르기'}
-        title={showDashboard ? '먼저 쓸 재료와 오늘 메뉴를 확인하세요' : '남은 재료로 오늘 메뉴를 골라보세요'}
-        description={showDashboard ? '보유 재료와 날짜를 확인하고 메뉴의 정확한 분량과 조리법을 살펴보세요.' : '가입이나 재료 등록 없이 메뉴를 비교하고, 준비 재료와 만드는 순서까지 확인할 수 있어요.'}
+        eyebrow={showDashboard ? '내 냉장고' : '우리 집 저녁 식단'}
+        title={showDashboard ? '먼저 쓸 재료와 오늘 메뉴를 확인하세요' : '이번 주 저녁부터 정해볼까요?'}
+        description={showDashboard ? '등록한 재료로 식단을 만들고, 정확한 분량과 조리법을 확인하세요. 추가 재료 등록은 건너뛸 수 있어요.' : '가입 없이 먹을 날짜와 인원을 정해 식단을 만들어요. 재료 등록은 일부만 하거나 건너뛸 수 있고, 아래에서 메뉴 하나만 둘러봐도 좋아요.'}
         action={
           <>
+            <Link to="/meal-plan" className="btn-primary">
+              이번 주 식단 만들기
+            </Link>
+            <Link to="/ingredients/new" className="btn-secondary">
+              {'\uC7AC\uB8CC \uCD94\uAC00'}
+            </Link>
             {ocrEnabled ? (
               <Link to="/import" className="btn-secondary">
                 {'\uC0AC\uC9C4 \uAC00\uC838\uC624\uAE30'}
               </Link>
             ) : null}
-            <Link to="/ingredients/new" className="btn-primary">
-              {'\uC7AC\uB8CC \uCD94\uAC00'}
-            </Link>
           </>
         }
       />
+
+      {readError ? <InventoryReadError loading={loading} onRetry={loadIngredients} /> : null}
 
       {decision && decision.status !== 'cancelled' ? (
         <section className="border-y border-emerald-200 bg-emerald-50/70 px-4 py-5 sm:px-6" aria-labelledby="today-menu-title">
