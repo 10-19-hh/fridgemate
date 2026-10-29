@@ -51,11 +51,36 @@ function monday() {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(NOW));
-  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllEnvs(); });
 
 describe('optional meal replacement and skipping feedback', () => {
+  it('keeps ordinary menu changes usable without showing or attaching pilot reasons', async () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    const writes = [];
+    render(<StoredEditor initialPlan={makePlan()} writes={writes} />);
+    expect(monday().queryByRole('combobox', { name: REASON_LABEL })).not.toBeInTheDocument();
+    expect(screen.queryByText(/이유는 선택 사항/)).not.toBeInTheDocument();
+    fireEvent.click(monday().getByRole('button', { name: '메뉴 교체' }));
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0].feedback).toBeUndefined();
+    fireEvent.click(monday().getByRole('button', { name: '외식·건너뛰기' }));
+    await monday().findByRole('button', { name: '식단에 포함' });
+    expect(writes[1].plan.slots[0].status).toBe('skipped');
+    expect(writes[1].feedback).toBeUndefined();
+  });
+
+  it('keeps ordinary confirmed-meal cooking available without pilot feedback', () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    const plan = makePlan();
+    const openCooking = vi.fn();
+    render(<StoredEditor initialPlan={plan} writes={[]} confirmedPlan={plan} hasDraft={false} onOpenCooking={openCooking} />);
+    fireEvent.click(monday().getByRole('button', { name: '만들어 먹었어요' }));
+    expect(openCooking).toHaveBeenCalledWith(`${WEEK}:dinner`, expect.any(HTMLButtonElement));
+    expect(monday().queryByRole('combobox', { name: REASON_LABEL })).not.toBeInTheDocument();
+  });
+
   it('offers a labelled optional selection including repetition fatigue without changing meal preferences', () => {
     const plan = makePlan();
     const before = structuredClone(plan);
@@ -179,6 +204,8 @@ describe('optional meal replacement and skipping feedback', () => {
   });
 
   it('keeps an answer and the old meal when no reviewed replacement exists', async () => {
+    // Existing ordinary menus remain readable when opened in the pilot build.
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
     const plan = makePlan({ preferences: { servings: 1, dinnerDays: [0], excludedIngredients: ['두유', '석류', '중화면', '쌀'] } });
     const writes = [];
     vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');

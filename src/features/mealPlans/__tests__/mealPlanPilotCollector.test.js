@@ -23,14 +23,92 @@ async function api({ resume = true, scope = 'guest' } = {}) {
 
 beforeEach(() => {
   vi.resetModules();
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(START));
   vi.stubGlobal('crypto', webcrypto);
   Object.defineProperty(window, 'indexedDB', { configurable: true, value: new FDBFactory() });
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe('local-only pilot operation collector', () => {
+  it('refuses resume outside the dedicated build while retaining existing consent and history', async () => {
+    const m = await api({ resume: false });
+    const before = await raw();
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    await expect(m.resumeMealPlanPilotCapture({ scope: 'guest', expectedVersion: m.state.version })).rejects.toThrow();
+    expect(await raw()).toEqual(before);
+    expect(await m.getMealPlanPilotConsent()).toEqual(m.state);
+  });
+
+  it('does not start observation in an ordinary build even with an active collecting consent', async () => {
+    const m = await api();
+    const before = await raw();
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    expect(await m.beginMealPlanPilotOperation({ scope: 'guest', startEvent: descriptor({
+      name: 'meal_plan_generation_started', status: 'started' }) })).toBeNull();
+    expect(await raw()).toEqual(before);
+  });
+
+  it('preserves a real local stock write through the business adapter without adding ordinary-build observation', async () => {
+    await api();
+    const before = await raw();
+    const db = await import('../../../db/indexedDB');
+    const { runMealPlanPilotAction } = await import('../mealPlanPilotActions');
+    const ingredient = { id: 'ordinary-stock', name: '두부', quantity: '1팩', consumed: false };
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    const result = await runMealPlanPilotAction({ scope: 'guest' }, async () => {
+      await db.saveIngredient(ingredient);
+      return ingredient;
+    }, () => [descriptor()]);
+    expect(result).toBe(ingredient);
+    expect(await db.getIngredientById('ordinary-stock')).toEqual(ingredient);
+    expect(await raw()).toEqual(before);
+  });
+
+  it('ignores a previously issued ticket in an ordinary build while preserving export and withdrawal', async () => {
+    const m = await api();
+    await m.finishMealPlanPilotOperation(await m.beginMealPlanPilotOperation({ scope: 'guest' }), [descriptor()]);
+    const delayed = await m.beginMealPlanPilotOperation({ scope: 'guest' });
+    const before = await raw();
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    expect(await m.finishMealPlanPilotOperation(delayed, [descriptor({ sourceKey: 'late-outcome' })])).toEqual({ status: 'ignored' });
+    expect(await raw()).toEqual(before);
+    expect(await m.getMealPlanPilotCapture()).toMatchObject({ status: 'active', captureState: 'paused', eventCount: 1 });
+    expect((await m.prepareMealPlanPilotExport({ scope: 'guest', expectedVersion: m.state.version })).dataset.events)
+      .toHaveLength(1);
+    expect((await m.withdrawMealPlanPilotConsent('guest')).status).toBe('withdrawn');
+    expect((await raw())[0]).not.toHaveProperty('events');
+  });
+
+  it('does not display stored collecting state as enabled outside the dedicated build or rewrite the session on read', async () => {
+    const m = await api();
+    const before = await raw();
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    expect(await m.getMealPlanPilotCapture()).toMatchObject({ status: 'active', captureState: 'paused', eventCount: 0 });
+    expect(await raw()).toEqual(before);
+  });
+
+  it.each(['begin', 'finish'])('does not append a %s outcome when the build boundary closes during hashing', async stage => {
+    const m = await api();
+    const ticket = stage === 'finish' ? await m.beginMealPlanPilotOperation({ scope: 'guest' }) : null;
+    const before = await raw();
+    let releaseHash;
+    const sign = webcrypto.subtle.sign.bind(webcrypto.subtle);
+    vi.spyOn(webcrypto.subtle, 'sign').mockImplementationOnce((...args) => new Promise(resolve => {
+      releaseHash = () => resolve(sign(...args));
+    }));
+    const pending = stage === 'begin'
+      ? m.beginMealPlanPilotOperation({ scope: 'guest', startEvent: descriptor({ name: 'meal_plan_generation_started', status: 'started' }) })
+      : m.finishMealPlanPilotOperation(ticket, [descriptor()]);
+    await vi.waitFor(() => expect(releaseHash).toBeTypeOf('function'));
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    releaseHash();
+    expect(await pending).toEqual(stage === 'begin' ? null : { status: 'ignored' });
+    expect(await raw()).toEqual(before);
+    expect(await m.getMealPlanPilotCapture()).toMatchObject({ captureState: 'paused' });
+  });
+
   it('keeps existing consent view unchanged and explicitly resumes into a private v2 session', async () => {
     const m = await api({ resume: false });
     const before = await m.getMealPlanPilotConsent();

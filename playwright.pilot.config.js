@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 // Exercise the isolated pilot artifact, never a development server or dist/.
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['pilot-policy.spec.js'],
+  testMatch: ['pilot-policy.spec.js', 'pilot-capture.spec.js'],
   outputDir: './test-results/pilot',
   fullyParallel: true,
   workers: 2,

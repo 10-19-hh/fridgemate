@@ -4,11 +4,13 @@ import { useAuth } from '../hooks/useAuth';
 import { grantMealPlanPilotConsent, prepareMealPlanPilotExport, withdrawMealPlanPilotConsent } from '../features/mealPlans/mealPlanPilotConsent';
 import { getMealPlanPilotCapture, resumeMealPlanPilotCapture, subscribeMealPlanPilotCapture } from '../features/mealPlans/mealPlanPilotCollector';
 import { LOCAL_PILOT_POLICY } from '../features/mealPlans/mealPlanPilotPolicy';
+import { isLocalPilotBuild } from '../utils/pilotMode';
 
 const READ_FAILURE = '파일럿 상태를 확인하지 못했어요. 상태를 다시 확인해 주세요.';
 const dateText = value => new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 
 function PilotSession({ scope }) {
+  const pilotEnabled = isLocalPilotBuild();
   const [capture, setCapture] = useState(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -109,7 +111,7 @@ function PilotSession({ scope }) {
   }
 
   function join() {
-    if (!accepted || !capture || capture.status === 'active') return;
+    if (!pilotEnabled || !accepted || !capture || capture.status === 'active') return;
     perform(async isCurrent => {
       const granted = await grantMealPlanPilotConsent({ scope, expectedVersion: capture.version,
         policyVersion: LOCAL_PILOT_POLICY, accepted: true }, { isCurrent });
@@ -124,7 +126,7 @@ function PilotSession({ scope }) {
   }
 
   function resume() {
-    if (capture?.status !== 'active') return;
+    if (!pilotEnabled || capture?.status !== 'active') return;
     perform(async isCurrent => {
       await resumeMealPlanPilotCapture({ scope, expectedVersion: capture.version }, { isCurrent });
       return { message: '앞으로의 파일럿 기록을 재개했어요. 이전에 빠진 행동 기록은 복원하지 않았어요.' };
@@ -180,10 +182,13 @@ function PilotSession({ scope }) {
   return (
     <div className="section-shell mx-auto w-full max-w-4xl px-4 sm:px-6 lg:px-10">
       <p role="status" className="sr-only" aria-label="파일럿 상태 알림" aria-live="polite" aria-atomic="true">{captureAnnouncement}</p>
-      <PageHeader title="식단 파일럿 참여" description="식단 기능을 개선하기 위한 별도의 선택이에요. 참여하지 않아도 재고·식단·조리 기능은 그대로 사용할 수 있어요." />
+      <PageHeader title={pilotEnabled ? '식단 파일럿 참여' : '파일럿 기록 관리'} description="식단 기능을 개선하기 위한 별도의 선택이에요. 참여하지 않아도 재고·식단·조리 기능은 그대로 사용할 수 있어요." />
+      {!pilotEnabled ? <p className="text-sm leading-6 muted">이 환경에서는 신규 참여나 기록 재개를 지원하지 않아요. 기존 기록의 내려받기와 참여 철회만 할 수 있어요.</p> : null}
       <section className="card space-y-4" aria-label="파일럿 기록 안내">
         <h2 className="text-lg font-semibold">이 기기에만 보관하고, 직접 내려받아요</h2>
         <ul className="list-disc space-y-2 pl-5 text-sm leading-6 text-slate-700">
+          <li>이번 파일럿 기록은 메뉴 결정과 실제 조리 흐름의 사용성 검증에만 사용해요. 연구나 모델 학습 용도로 사용하지 않아요.</li>
+          <li>브라우저 데이터를 지우거나 기기·브라우저·접속 주소가 바뀌면 이 기록에 접근할 수 없어요. 자동으로 다른 기기에 복원하지 않아요.</li>
           <li>식단 생성·확정·변경, 장보기 계산, 입고·조리·사용량 반영과 취소의 최소 이용 기록을 저장해요. 재료명·메모·OCR 원문·계정 식별자는 파일럿 내보내기에 넣지 않아요.</li>
           <li>메뉴를 교체하거나 건너뛸 때 선택한 이유도 기록해요. 취향·재료·비용·난이도·일정·메뉴 반복 등의 선택 항목만 저장하며, 이유를 고르지 않아도 이용할 수 있어요.</li>
           <li>동의 시점부터 35일이 지나면 세션 전체를 삭제해요. 앱이 닫혀 있었다면 다음 앱 실행이나 파일럿 상태 확인 때 정리해요.</li>
@@ -211,7 +216,9 @@ function PilotSession({ scope }) {
               <div><dt className="muted">저장된 최소 기록</dt><dd className="mt-1 font-medium">{capture.eventCount}개</dd></div>
               <div><dt className="muted">수집 상태</dt><dd className="mt-1 font-medium">{capture.captureState === 'collecting' ? '앞으로의 이용 기록 수집 중' : '기록 일시 중지'}</dd></div>
             </dl>
-            <p className="text-sm leading-6 muted">새로고침 후나 다른 탭에서 이어 쓸 때는 기록 상태를 확인해 주세요. 일시 중지 상태라면 앞으로 기록 재개를 선택해야 해요. 재개 전 누락된 행동은 복원하지 않아요.</p>
+            <p className="text-sm leading-6 muted">{pilotEnabled
+              ? '새로고침 후나 다른 탭에서 이어 쓸 때는 기록 상태를 확인해 주세요. 일시 중지 상태라면 앞으로 기록 재개를 선택해야 해요. 재개 전 누락된 행동은 복원하지 않아요.'
+              : '이 환경에서 이용한 행동은 파일럿 기록에 추가하지 않아요. 기존 기록은 내려받거나 참여 철회로 삭제할 수 있어요.'}</p>
             {capture.captureState === 'paused' || capture.gapCount > 0 || capture.pendingCount > 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm leading-6 text-amber-900">
                 <p>파일럿 관측이 완전하지 않을 수 있어요. 기록 누락 구간 {capture.gapCount}개, 처리 확인 중 {capture.pendingCount}개예요. 식단·조리·입고 자체의 실패를 뜻하지는 않아요.</p>
@@ -219,7 +226,7 @@ function PilotSession({ scope }) {
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              {capture.captureState === 'paused' ? <button className="btn-primary min-h-11" type="button" disabled={disabled} onClick={resume}>앞으로 기록 재개</button> : null}
+              {pilotEnabled && capture.captureState === 'paused' ? <button className="btn-primary min-h-11" type="button" disabled={disabled} onClick={resume}>앞으로 기록 재개</button> : null}
               <button className="btn-secondary min-h-11" type="button" disabled={disabled} onClick={download}>파일럿 기록 내려받기</button>
               <button ref={withdrawButton} className="btn-secondary min-h-11" type="button" disabled={disabled} onClick={() => {
                 if (busy.current || reading.current) return;
@@ -237,7 +244,7 @@ function PilotSession({ scope }) {
               </div>
             ) : null}
           </>
-        ) : capture ? (
+        ) : capture && pilotEnabled ? (
           <>
             <p className="text-sm leading-6">{capture.status === 'expired' ? '보관 기간이 끝나 이전 파일럿 기록을 삭제했어요. 다시 참여하려면 새로 동의해 주세요.' : capture.status === 'withdrawn' ? '현재 참여하지 않고 있어요. 새 동의는 이전 기록을 복원하지 않아요.' : '현재 참여하지 않고 있어요. 체크하고 시작하기 전에는 파일럿 기록을 수집하지 않아요.'}</p>
             <label className="flex items-start gap-3 text-sm leading-6">

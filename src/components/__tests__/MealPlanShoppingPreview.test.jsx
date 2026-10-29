@@ -74,6 +74,7 @@ beforeAll(() => {
 });
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
   pilot.begin.mockResolvedValue(Object.freeze({}));
   pilot.finish.mockResolvedValue({ status: 'recorded' });
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -82,11 +83,12 @@ beforeEach(async () => {
     await clearAccountLocalData(scope);
   }
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe('MealPlanShoppingPreview', () => {
   it('records only explicit completed calculations and preserves the displayed result when pilot storage fails', async () => {
     await saveConfirmed(fixturePlan());
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
     render(page());
     expect(pilot.begin).not.toHaveBeenCalled();
     pilot.finish.mockRejectedValue(new Error('optional pilot failure'));
@@ -97,6 +99,7 @@ describe('MealPlanShoppingPreview', () => {
   });
 
   it('does not turn a discarded read after focus into a failed calculation', async () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
     const pending = deferred();
     vi.spyOn(repository, 'getMealPlanningSnapshot').mockReturnValueOnce(pending.promise);
     render(page());

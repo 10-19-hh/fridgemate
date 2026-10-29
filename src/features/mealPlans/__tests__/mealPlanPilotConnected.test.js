@@ -27,6 +27,7 @@ async function setup({ consent = true } = {}) {
   const input = { scope: 'guest', weekStart: WEEK, slotId: `${WEEK}:dinner`, operationId: 'private-first', expectedPlanRevision: 2,
     usageMode: 'measured', completeUsageConfirmed: true, usages: [{ ...check(row), amount: 150, unit: 'g' }] };
   const grant = async () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
     const state = await pilot.grantMealPlanPilotConsent({ scope: 'guest', expectedVersion: null, accepted: true, policyVersion: 'local-pilot-35d-v1' });
     await collector.resumeMealPlanPilotCapture({ scope: 'guest', expectedVersion: state.version });
     return state;
@@ -43,7 +44,7 @@ beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto);
   Object.defineProperty(window, 'indexedDB', { configurable: true, value: new FDBFactory() });
 });
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe('real scoped collector with real business transactions', () => {
   it('exports linked pseudonyms once across cooking, receipt, correction and a different-request replay', async () => {

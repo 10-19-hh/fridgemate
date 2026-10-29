@@ -1,4 +1,5 @@
 import { runMealPlanPilotTransaction } from '../../db/indexedDB';
+import { isLocalPilotBuild } from '../../utils/pilotMode';
 import { validateLocalMealPlanPilotExport } from './mealPlanPilotExport';
 import { LOCAL_PILOT_POLICY, LOCAL_PILOT_RETENTION_MS, parsePilotInstant, createPilotVersion } from './mealPlanPilotPolicy.js';
 
@@ -203,6 +204,7 @@ export function getMealPlanPilotConsent(scope = 'guest') {
 }
 
 export async function grantMealPlanPilotConsent(input, options) {
+  check(isLocalPilotBuild());
   exact(input, ['scope', 'expectedVersion', 'policyVersion', 'accepted']);
   const { scope, expectedVersion, policyVersion, accepted } = input;
   scopeValue(scope);
@@ -214,6 +216,7 @@ export async function grantMealPlanPilotConsent(input, options) {
   check(accepted === true && policyVersion === LOCAL_PILOT_POLICY
     && (expectedVersion === null || (typeof expectedVersion === 'string' && /^[a-f0-9]{32}$/.test(expectedVersion))));
   const result = await accessMealPlanPilotSession(scope, (previous, store, now, changed) => {
+    check(isLocalPilotBuild());
     // A stale grant must not roll back a just-completed expiry purge.
     if (previous?.status === 'active' || (previous?.version ?? null) !== expectedVersion) return null;
     const expiresAt = new Date(instant(now) + LOCAL_PILOT_RETENTION_MS).toISOString();

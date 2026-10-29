@@ -31,6 +31,7 @@ async function ready() {
 
 beforeEach(async () => {
   vi.resetAllMocks();
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
   auth.storageScope = 'guest'; auth.loading = false;
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(NOW));
@@ -39,7 +40,7 @@ beforeEach(async () => {
   collector.finish.mockResolvedValue({ status: 'recorded' });
 });
 afterEach(async () => {
-  cleanup(); vi.restoreAllMocks(); vi.useRealTimers();
+  cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers();
   for (const scope of ['guest', 'user:pilot-b']) await clearAccountLocalData(scope);
 });
 

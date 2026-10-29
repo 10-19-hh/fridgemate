@@ -16,10 +16,12 @@ let collector;
 let db;
 
 async function ready({ optedIn = true, confirmed = false } = {}) {
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
   const plan = domain.generateMealPlan({ scope: 'guest', weekStart: WEEK, now: NOW,
     preferences: { servings: 1, dinnerDays: [0], excludedIngredients: [] } });
   await repository.saveMealPlan(plan, 'guest', 0);
   if (confirmed) await repository.confirmMealPlan(WEEK, 'guest', 1);
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
   if (optedIn) {
     const state = await consent.grantMealPlanPilotConsent({ scope: 'guest', expectedVersion: null,
       accepted: true, policyVersion: 'local-pilot-35d-v1' });
@@ -41,6 +43,7 @@ beforeEach(async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(NOW));
   vi.stubGlobal('crypto', webcrypto);
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
   Object.defineProperty(window, 'indexedDB', { configurable: true, value: new FDBFactory() });
   auth.storageScope = 'guest'; auth.loading = false;
   [hook, repository, domain, consent, collector, db] = await Promise.all([
@@ -49,9 +52,23 @@ beforeEach(async () => {
     import('../../features/mealPlans/mealPlanPilotCollector'), import('../../db/indexedDB'),
   ]);
 });
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe('optional meal feedback at the actual local storage boundary', () => {
+  it('preserves ordinary menu changes without collecting through existing active pilot consent', async () => {
+    const view = await ready({ confirmed: true });
+    const before = structuredClone(await storedPilot());
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    const next = domain.setMealPlanSlotSkipped(view.result.current.plan, SLOT, true, { now: NOW });
+    await act(async () => { expect(await view.result.current.savePlan(next,
+      { slotId: SLOT, changeType: 'skip', reasonCode: 'repetition' })).not.toBeNull(); });
+    const record = await repository.getMealPlan(WEEK);
+    expect(record.draft.slots[0].status).toBe('skipped');
+    expect(record.confirmed.slots[0].status).toBe('planned');
+    expect(await storedPilot()).toEqual(before);
+    expect(await exportedEvents()).toEqual([]);
+  });
+
   it('exports a replacement reason only after the new menu is saved and keeps it out of the plan', async () => {
     const view = await ready();
     const before = view.result.current.plan;

@@ -81,6 +81,7 @@ function page() {
 describe('MealPlanPage storage integration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date(NOW));
     pilot.begin.mockResolvedValue(Object.freeze({}));
@@ -93,9 +94,10 @@ describe('MealPlanPage storage integration', () => {
     repository.saveMealPlan.mockImplementation(async (...args) => saveDraft(...args));
     repository.confirmMealPlan.mockImplementation(async (...args) => confirmDraft(...args));
   });
-  afterEach(() => { cleanup(); vi.useRealTimers(); });
+  afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
   it('connects the explicit generation click to a started observation and its saved result, not initial render', async () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
     render(page());
     const button = await screen.findByRole('button', { name: '한 주 식단 만들기' });
     expect(pilot.begin).not.toHaveBeenCalled();

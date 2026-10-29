@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { openAnalyticsConsentSettings } from '../utils/analyticsConsent';
+import { isLocalPilotBuild } from '../utils/pilotMode';
 
 function SiteFooter() {
   return (
@@ -20,7 +21,7 @@ function SiteFooter() {
             냉장고 활용 가이드
           </Link>
           <Link to="/pilot" className="min-h-11 inline-flex items-center font-medium text-slate-600 hover:text-slate-900">
-            식단 파일럿
+            {isLocalPilotBuild() ? '식단 파일럿' : '파일럿 기록 관리'}
           </Link>
           <button
             className="min-h-11 font-medium text-slate-600 underline-offset-2 hover:text-slate-900 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-green-700"

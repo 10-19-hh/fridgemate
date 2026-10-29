@@ -119,6 +119,7 @@ test('AT-18 past confirmed hold survives a skip draft until explicit confirmatio
   await expect(meal(page).getByText('조리 여부 확인 필요 · 예정 배분 보류', { exact: true })).toBeVisible();
   await expect(meal(page).getByRole('button', { name: '메뉴 교체', exact: true })).toBeDisabled();
   await meal(page).getByRole('button', { name: '만들지 않았어요', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: /이유/ })).toHaveCount(0);
   const confirm = page.getByRole('button', { name: '수정 초안으로 확정본 교체', exact: true });
   await expect(confirm).toBeEnabled();
   await expect(overdue.getByRole('button', { name: `${WEEK} 식단 확인`, exact: true })).toBeVisible();
@@ -146,6 +147,7 @@ test('AT-18 moves a missed meal to a future empty day and reloads without consum
   const overdue = page.getByRole('region', { name: '지난 끼니 확인', exact: true });
   await overdue.getByRole('button', { name: `${WEEK} 식단 확인`, exact: true }).click();
   await meal(page).getByRole('button', { name: '날짜 이동', exact: true }).click();
+  await expect(page.getByRole('combobox', { name: /이유/ })).toHaveCount(0);
   await expect(panel(page).getByRole('option', { name: '두 메뉴 날짜 바꾸기', exact: true })).toHaveCount(0);
   await expect(panel(page).getByLabel('옮길 날짜', { exact: true })).toHaveAttribute('min', NEXT_WEEK);
   await panel(page).getByLabel('옮길 날짜', { exact: true }).fill(day(8));
@@ -263,6 +265,7 @@ test('new stock does not rewrite real catalog meals and readjustment preserves l
   await expect(page.getByText('확정됨', { exact: true })).toBeVisible();
   await meal(page, day(2)).getByRole('button', { name: '만들어 먹었어요', exact: true }).click();
   const cooking = page.getByRole('region', { name: '조리와 재고 기록', exact: true });
+  await expect(page.getByRole('combobox', { name: /이유/ })).toHaveCount(0);
   await cooking.getByRole('button', { name: '사용량 없이 조리만 기록', exact: true }).click();
   await expect(cooking.getByText('조리만 기록했어요. 남은 재고량을 다시 확인해 주세요.', { exact: true })).toBeVisible();
   await cooking.getByRole('button', { name: '조리 창 닫기', exact: true }).click();

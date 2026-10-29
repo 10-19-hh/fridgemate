@@ -1,6 +1,7 @@
 import { accessMealPlanPilotSession, mealPlanPilotConsentView, saveMealPlanPilotSession, subscribeMealPlanPilotStore } from './mealPlanPilotConsent';
 import { createPilotVersion, parsePilotInstant } from './mealPlanPilotPolicy';
 import { isMealPlanFeedback } from './mealPlanFeedback';
+import { isLocalPilotBuild } from '../../utils/pilotMode';
 
 const ERROR = '파일럿 관측을 이어가지 못했어요. 상태를 확인하고 다시 시작해주세요.';
 const DEADLINE = 2000;
@@ -19,7 +20,7 @@ const earliest = values => values.filter(Boolean).sort()[0];
 function check(condition) { if (!condition) throw new Error(ERROR); }
 
 function view(row) {
-  return { ...mealPlanPilotConsentView(row), captureState: row?.capture?.state || 'paused',
+  return { ...mealPlanPilotConsentView(row), captureState: isLocalPilotBuild() ? row?.capture?.state || 'paused' : 'paused',
     gapCount: (row?.gaps?.length || 0) + (row?.capture?.missingSince ? 1 : 0), pendingCount: row?.capture?.pending.length || 0 };
 }
 
@@ -128,8 +129,10 @@ function addMissingGap(row, from, through) {
 
 export async function resumeMealPlanPilotCapture(input, { isCurrent = () => true } = {}) {
   try {
+    check(isLocalPilotBuild());
     check(input && Object.keys(input).length === 2 && scopeValid(input.scope) && typeof input.expectedVersion === 'string');
     const result = await accessMealPlanPilotSession(input.scope, (row, store, now, changed) => {
+      if (!isLocalPilotBuild()) return null;
       if (row?.status !== 'active' || row.version !== input.expectedVersion) return null;
       const loss = degraded.get(input.scope);
       const rememberedSince = earliest([row.observedThrough, row.capture?.missingSince,
@@ -224,15 +227,17 @@ function append(row, events) {
 }
 
 function sameCapture(row, reference) {
-  return row?.status === 'active' && row.schemaVersion === 2 && row.version === reference.version
+  return isLocalPilotBuild() && row?.status === 'active' && row.schemaVersion === 2 && row.version === reference.version
     && row.capture.version === reference.capture.version && row.capture.owner === pageOwner() && row.capture.state === 'collecting';
 }
 
 async function persistLoss(scope, reference, signal, epoch) {
+  if (!isLocalPilotBuild()) return;
   if (!rememberLoss(scope, reference, nowISO(), epoch)) return;
   if (signal?.aborted) return;
   try {
     await accessMealPlanPilotSession(scope, (row, store, now, changed) => {
+      if (!isLocalPilotBuild()) return;
       if (row?.status !== 'active' || !lossAffects(row, scope)) return;
       pause(row, degraded.get(scope)?.since);
       saveMealPlanPilotSession(store, row, now, changed);
@@ -241,6 +246,7 @@ async function persistLoss(scope, reference, signal, epoch) {
 }
 
 export async function beginMealPlanPilotOperation(input, { isCurrent = () => true } = {}) {
+  if (!isLocalPilotBuild()) return null;
   let reference;
   const scope = input?.scope;
   if (!scopeValid(scope)) return null;
@@ -250,6 +256,7 @@ export async function beginMealPlanPilotOperation(input, { isCurrent = () => tru
     const startEvent = input.startEvent === undefined ? null : structuredClone(input.startEvent);
     return await bounded(async signal => {
       reference = await accessMealPlanPilotSession(scope, (row, store, now, changed) => {
+        if (!isLocalPilotBuild()) return null;
         observeOwner(row, scope, store, now, changed);
         return row?.status === 'active' && row.schemaVersion === 2 && row.capture.state === 'collecting' ? row : null;
       }, { isCurrent, signal });
@@ -284,6 +291,7 @@ export async function beginMealPlanPilotOperation(input, { isCurrent = () => tru
 }
 
 export function finishMealPlanPilotOperation(ticket, descriptors) {
+  if (!isLocalPilotBuild()) return Promise.resolve({ status: 'ignored' });
   const operation = tickets.get(ticket);
   if (!operation) return Promise.resolve({ status: 'ignored' });
   if (operation.result) return operation.result;

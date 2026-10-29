@@ -9,6 +9,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- Restricted new pilot consent, capture resume and observation writes to the explicit pilot build, including stale tickets and asynchronous completion. Ordinary builds retain business actions and existing pilot export/withdrawal management without pilot reason prompts. Clarified product-usability-only purpose, browser/origin data-loss boundaries and pending remote/JSON collection decisions in `docs/PILOT_EXPOSURE_POLICY_2026-10-29.md`. Preserved the pre-policy 53-file state in a local WIP commit; no push, deployment or participant launch is claimed.
+
 - Added an actual pilot-artifact cooking-to-manual-export browser check, preserving unknown usage without consuming stock and excluding source/private fixture fields. Revalidated the existing local pilot and documented the current source/deployment mismatch, cloud-selected SEO config check and reauthentication gate in `docs/PILOT_PREVIEW_RESUME_2026-10-17.md`; no remote release or participant launch is claimed.
 
 - Added optional fixed-choice reasons for saved meal replacement, skipping and explicitly reported uncooked past confirmed meals. Kept one-time reasons in the consent-gated local pilot export rather than recipe snapshots or lasting preferences, with strict v2 change events and backward-compatible v1 reading. Preserved unanswered choices, failed-save truth, business writes when feedback is invalid, and keyboard focus after replacement. Documented pilot decision criteria, OCR measurement and Preview access/rollback gates in the 2026-10-04 pilot records.

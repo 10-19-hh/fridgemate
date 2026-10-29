@@ -24,15 +24,24 @@ const seed = async (row, scope = 'guest') => (await import('../../../db/indexedD
 
 beforeEach(() => {
   vi.resetModules();
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date(START));
   Object.defineProperty(window, 'indexedDB', { configurable: true, value: new FDBFactory() });
   window.localStorage.clear();
   window.sessionStorage.clear();
 });
-afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 
 describe('explicit local pilot consent', () => {
+  it('refuses new consent outside a dedicated pilot build without storing identifiers', async () => {
+    const m = await api();
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    await expect(grant(m)).rejects.toThrow();
+    expect(await m.getMealPlanPilotConsent()).toEqual({ status: 'off', version: null });
+    expect(await raw()).toEqual([]);
+  });
+
   it.each(['get', 'grant'])('bounds a stalled %s open and prevents writes when its database arrives late', async operation => {
     const m = await api();
     const before = await grant(m);

@@ -35,6 +35,7 @@ async function join() {
 }
 
 beforeEach(async () => {
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
   expect(Page, 'the dedicated public pilot settings page must exist').toBeTypeOf('function');
   expect(collector.getMealPlanPilotCapture, 'use the real scoped capture API').toBeTypeOf('function');
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -59,12 +60,38 @@ afterEach(async () => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.useRealTimers();
   for (const scope of ['guest', ACCOUNT, OTHER]) await database.clearAccountLocalData(scope);
   localStorage.clear();
 });
 
 describe('explicit browser-local pilot settings', () => {
+  it('does not offer new participation in an ordinary build', async () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    render(<App />);
+    await ready();
+    expect(screen.queryByRole('checkbox', { name: CONSENT_LABEL })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '동의하고 기록 시작' })).not.toBeInTheDocument();
+    expect(await raw('guest')).toEqual([]);
+  });
+
+  it('retains ordinary access to existing exports and withdrawal without a resume control', async () => {
+    await grant('guest');
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
+    render(<App />);
+    await ready();
+    expect(screen.queryByRole('button', { name: '앞으로 기록 재개' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/일시 중지 상태라면 앞으로 기록 재개를 선택/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '파일럿 기록 내려받기' }));
+    await waitFor(() => expect(downloads).toHaveLength(1));
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: '참여 철회 및 기록 삭제' }));
+    fireEvent.click(screen.getByRole('button', { name: '철회 및 삭제 확인' }));
+    await waitFor(async () => expect((await consent.getMealPlanPilotConsent()).status).toBe('withdrawn'));
+    expect(screen.queryByRole('button', { name: '동의하고 기록 시작' })).not.toBeInTheDocument();
+  });
+
   it('announces capture changes and external withdrawal without taking keyboard focus', async () => {
     await grant('guest');
     render(<><button>다른 작업 계속</button><App /></>);

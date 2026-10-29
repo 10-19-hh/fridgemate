@@ -108,7 +108,7 @@ function MealSlot({ slot, dayIndex, ingredients, pantryItems, disabled, overdue,
           </>
         )}
         {!planned && !cooked && <p className="mt-2 text-sm leading-6 muted">{slot.reason || '이 날은 메뉴 추천에서 제외했어요.'}</p>}
-        {!cooked && slot.status !== 'skipped' ? <label className="mt-4 block max-w-sm text-xs font-medium text-slate-700">
+        {isLocalPilotBuild() && !cooked && slot.status !== 'skipped' ? <label className="mt-4 block max-w-sm text-xs font-medium text-slate-700">
           교체·건너뛰기 이유 (선택)
           <select className="mt-1 min-h-11 disabled:cursor-not-allowed disabled:opacity-50" value={reasonCode} disabled={disabled || slot.locked}
             onChange={event => setSelection({ context: selectionContext, reasonCode: event.target.value })}>
@@ -200,7 +200,7 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
       return;
     }
     return persist(nextPlan, `${shortDate(slot.date)} 메뉴를 바꿨어요.`, savePlan,
-      { slotId: slot.id, changeType: 'replace', reasonCode });
+      isLocalPilotBuild() ? { slotId: slot.id, changeType: 'replace', reasonCode } : undefined);
   }
 
   async function handleSkip(slot, reasonCode) {
@@ -211,7 +211,7 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
       setNotice(nextSlot.notice || nextSlot.reason);
       return;
     }
-    const feedback = skipping ? { slotId: slot.id,
+    const feedback = isLocalPilotBuild() && skipping ? { slotId: slot.id,
       changeType: slot.status === 'planned' && overdueIds.has(slot.id) ? 'not_cooked' : 'skip', reasonCode } : undefined;
     return persist(nextPlan, skipping ? '이 날의 저녁은 건너뛰어요.' : '식단에 다시 포함했어요.', savePlan, feedback);
   }
@@ -317,7 +317,7 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
 
       {plan ? (
         <section className="meal-plan-board" aria-label="한 주 저녁 식단표">
-          <p className="text-xs leading-5 muted">이유는 선택 사항이에요. 파일럿 기록에 동의한 경우에만 이 브라우저에 저장해요.</p>
+          {isLocalPilotBuild() ? <p className="text-xs leading-5 muted">이유는 선택 사항이에요. 파일럿 기록에 동의한 경우에만 이 브라우저에 저장해요.</p> : null}
           {plan.slots.map((slot, index) => (
             <MealSlot key={`${storageScope}:${weekStart}:${slot.id}`} slot={slot} dayIndex={index} ingredients={inventoryError ? [] : ingredients} pantryItems={pantryItems} disabled={busy || settingsDirty}
               overdue={overdueIds.has(slot.id)}

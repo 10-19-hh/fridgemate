@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import AppRoutes from '../AppRoutes';
 import SiteFooter from '../SiteFooter';
 import RouteMetadata from '../RouteMetadata';
@@ -12,12 +12,13 @@ const pages = Object.fromEntries(['AboutPage', 'AccountPage', 'ContactPage', 'Ho
   'IngredientHubPage', 'IngredientFormPage', 'IngredientsPage', 'LoginPage', 'MealPlanPage', 'NotFoundPage',
   'PrivacyPage', 'PublicRecipePage', 'RecipesPage', 'SignupPage'].map(name => [name, Placeholder]));
 pages.MealPlanPilotPage = Pilot;
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 it('exposes a guest-accessible pilot route and a distinct footer link without changing analysis settings', () => {
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
   render(<MemoryRouter initialEntries={['/pilot']}><AppRoutes pages={pages} ocrEnabled={false} /><SiteFooter /></MemoryRouter>);
   expect(screen.queryByRole('heading', { name: '식단 파일럿 참여' })).toBeInTheDocument();
-  expect(screen.getByRole('link', { name: '식단 파일럿' })).toHaveAttribute('href', '/pilot');
+  expect(screen.getByRole('link', { name: '파일럿 기록 관리' })).toHaveAttribute('href', '/pilot');
   expect(screen.getByRole('button', { name: '분석 설정' })).toBeInTheDocument();
 });
 

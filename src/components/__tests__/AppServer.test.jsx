@@ -15,6 +15,7 @@ beforeAll(async () => {
   vi.stubEnv('VITE_API_URL_OVERRIDE', '');
   vi.stubEnv('VITE_API_URL', '');
   vi.stubEnv('VITE_API_BASE_URL', '');
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'false');
   ({ default: AppServer } = await import('../../AppServer'));
   ({ AuthProvider } = await import('../../hooks/useAuth'));
   ({ AnalyticsProvider } = await import('../../hooks/useAnalytics'));
@@ -53,11 +54,12 @@ it('renders the public home without invalid elements from an unregistered server
   expect(errors).not.toHaveBeenCalled();
 });
 
-it('renders the real pilot page on the server without claiming browser consent or collection', () => {
+it.each([['false', '파일럿 기록 관리'], ['true', '식단 파일럿 참여']])('renders the real pilot page with build mode %s without claiming browser consent or collection', (enabled, title) => {
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', enabled);
   const errors = vi.spyOn(console, 'error');
   const html = render('/pilot');
 
-  expect(html).toMatch(/<h1\b[^>]*>식단 파일럿 참여<\/h1>/);
+  expect(html).toMatch(new RegExp(`<h1\\b[^>]*>${title}</h1>`));
   expect(html).toContain('파일럿 상태를 확인하고 있어요.');
   expect(html).not.toContain('앞으로의 이용 기록 수집 중');
   expect(errors).not.toHaveBeenCalled();

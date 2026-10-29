@@ -15,6 +15,7 @@ const grant = scope => consent.grantMealPlanPilotConsent({ scope, expectedVersio
 function App({ path = '/meal-plan' }) { return <MemoryRouter initialEntries={[path]}><Notice /></MemoryRouter>; }
 
 beforeEach(async () => {
+  vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
   expect(Notice, 'a scoped notice must expose interrupted collection outside pilot settings').toBeTypeOf('function');
   expect(collector.getMealPlanPilotCapture).toBeTypeOf('function');
   auth.storageScope = ACCOUNT;
@@ -25,6 +26,7 @@ beforeEach(async () => {
 afterEach(async () => {
   cleanup();
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
   for (const scope of [ACCOUNT, OTHER]) await database.clearAccountLocalData(scope);
 });
 
