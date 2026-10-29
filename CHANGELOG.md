@@ -7,6 +7,10 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ## [Unreleased]
 
+### Security
+
+- Updated only three locked Express transitive packages: `body-parser` 2.3.0 → 2.4.0, `proxy-addr` 2.0.7 → 2.0.8 and `qs` 6.16.0 → 6.16.1. Preserved direct dependency ranges, unrelated platform metadata and CI thresholds. A clean install passed the production dependency audit with zero findings; full development-tool auditing remains separate. Recorded fresh verification and limitations in `docs/DEPENDENCY_SECURITY_CLOSEOUT_2026-10-29.md`.
+
 ### Added
 
 - Restricted new pilot consent, capture resume and observation writes to the explicit pilot build, including stale tickets and asynchronous completion. Ordinary builds retain business actions and existing pilot export/withdrawal management without pilot reason prompts. Clarified product-usability-only purpose, browser/origin data-loss boundaries and pending remote/JSON collection decisions in `docs/PILOT_EXPOSURE_POLICY_2026-10-29.md`. Preserved the pre-policy 53-file state in a local WIP commit; no push, deployment or participant launch is claimed.
