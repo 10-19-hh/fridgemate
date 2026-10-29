@@ -11,6 +11,8 @@
     "dev:worker": "wrangler dev",
     "lint": "eslint .",
     "build": "vite build",
+    "build:pilot": "node scripts/build-local-pilot.mjs",
+    "prepare:pilot-preview": "node scripts/prepare-pilot-preview.mjs",
     "postbuild": "node scripts/copy-tesseract-assets.js && node scripts/generate-adsense-assets.js && node scripts/generate-seo-pages.js && node scripts/verify-seo-output.js",
     "preview": "vite preview",
     "verify:public-deployment": "node scripts/verify-public-deployment.js",

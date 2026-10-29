@@ -1,5 +1,6 @@
 import { accessMealPlanPilotSession, mealPlanPilotConsentView, saveMealPlanPilotSession, subscribeMealPlanPilotStore } from './mealPlanPilotConsent';
 import { createPilotVersion, parsePilotInstant } from './mealPlanPilotPolicy';
+import { isMealPlanFeedback } from './mealPlanFeedback';
 
 const ERROR = '파일럿 관측을 이어가지 못했어요. 상태를 확인하고 다시 시작해주세요.';
 const DEADLINE = 2000;
@@ -165,11 +166,16 @@ async function bounded(task, onTimeout) {
 
 function validateDescriptor(value) {
   const required = ['name', 'status', 'sourceKey', 'operationKey', 'occurredAt'];
-  const optional = ['planKey', 'slotKey', 'reversesKey', 'plannedSlotCount', 'engineVersion'];
+  const optional = ['planKey', 'slotKey', 'reversesKey', 'plannedSlotCount', 'engineVersion', 'changeType', 'reasonCode'];
   check(value && typeof value === 'object' && !Array.isArray(value)
     && required.every(key => Object.hasOwn(value, key))
     && Reflect.ownKeys(value).every(key => [...required, ...optional].includes(key)));
   check(parsePilotInstant(value.occurredAt) !== null);
+  if (Object.hasOwn(value, 'changeType') || Object.hasOwn(value, 'reasonCode')) {
+    check(Object.hasOwn(value, 'changeType') && Object.hasOwn(value, 'reasonCode')
+      && value.name === 'meal_slot_changed' && value.status === 'success'
+      && isMealPlanFeedback(value.changeType, value.reasonCode));
+  }
   for (const key of ['sourceKey', 'operationKey', 'planKey', 'slotKey', 'reversesKey']) {
     if (Object.hasOwn(value, key)) check(typeof value[key] === 'string' && value[key].length > 0 && value[key].length <= 512);
   }
@@ -188,14 +194,16 @@ async function eventsFor(row, descriptors) {
   return Promise.all(descriptors.map(async descriptor => {
     const date = new Date(Date.parse(descriptor.occurredAt) + 9 * 3600000);
     date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
-    const event = { version: 1, name: descriptor.name, status: descriptor.status,
+    const event = { version: Object.hasOwn(descriptor, 'changeType') ? 2 : 1, name: descriptor.name, status: descriptor.status,
       id: await pseudonym(key, 'evt', descriptor.sourceKey), subjectId: row.subjectId,
       operationId: await pseudonym(key, 'op', descriptor.operationKey), occurredAt: descriptor.occurredAt,
       weekKey: date.toISOString().slice(0, 10) };
     for (const [source, target, prefix] of [['planKey', 'planId', 'plan'], ['slotKey', 'slotId', 'slot'], ['reversesKey', 'reversesEventId', 'evt']]) {
       if (Object.hasOwn(descriptor, source)) event[target] = await pseudonym(key, prefix, descriptor[source]);
     }
-    for (const field of ['plannedSlotCount', 'engineVersion']) if (Object.hasOwn(descriptor, field)) event[field] = descriptor[field];
+    for (const field of ['plannedSlotCount', 'engineVersion', 'changeType', 'reasonCode']) {
+      if (Object.hasOwn(descriptor, field)) event[field] = descriptor[field];
+    }
     return event;
   }));
 }

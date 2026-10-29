@@ -2,6 +2,8 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MealQuantityDetails from '../MealQuantityDetails';
 import { shortDate } from './mealPlanDisplay';
+import { isLocalPilotBuild } from '../../utils/pilotMode';
+import { MEAL_PLAN_REASON_OPTIONS } from '../../features/mealPlans/mealPlanFeedback';
 import {
   generateMealPlan,
   getSlotSummary,
@@ -18,6 +20,13 @@ function parseExcludedIngredients(value) {
 }
 
 function MealSlot({ slot, dayIndex, ingredients, pantryItems, disabled, overdue, canCook, canChange, onCook, onMove, onReplace, onLock, onSkip }) {
+  const selectionContext = `${slot.date}|${slot.templateKey}|${slot.status}`;
+  const currentContextRef = useRef(null);
+  const [selection, setSelection] = useState(() => ({ context: selectionContext, reasonCode: '' }));
+  const reasonCode = selection.context === selectionContext ? selection.reasonCode : '';
+  if (selection.context !== selectionContext) {
+    setSelection({ context: selectionContext, reasonCode: '' });
+  }
   const summary = getSlotSummary(slot, ingredients, pantryItems);
   const planned = slot.status === 'planned';
   const cooked = slot.status === 'cooked';
@@ -25,8 +34,41 @@ function MealSlot({ slot, dayIndex, ingredients, pantryItems, disabled, overdue,
     ? `등록·보유 확인된 ${summary.availableIngredients.slice(0, 2).join('·')} 재료명으로 고른 메뉴예요. 필요한 분량은 확인해 주세요.${summary.unverifiedExpiryIngredients?.length ? ' 기한 미확인 재료는 조리일까지 사용할 수 있는지 확인해 주세요.' : ''}`
     : summary.reason || slot.reason;
 
+  async function changeMeal(event, action) {
+    const opener = event.currentTarget;
+    const ownerDocument = opener.ownerDocument;
+    const wasFocused = ownerDocument.activeElement === opener;
+    let movedFocus = false;
+    const rememberFocus = focusEvent => {
+      if (focusEvent.target !== opener && focusEvent.target !== ownerDocument.body) movedFocus = true;
+    };
+    if (wasFocused) ownerDocument.addEventListener('focusin', rememberFocus);
+    let savedPlan;
+    try {
+      savedPlan = await action(reasonCode || 'not_answered');
+    } catch (error) {
+      ownerDocument.removeEventListener('focusin', rememberFocus);
+      throw error;
+    }
+    const savedSlot = savedPlan?.slots.find(item => item.id === slot.id);
+    if (!wasFocused || !savedSlot || movedFocus || !opener.isConnected) {
+      ownerDocument.removeEventListener('focusin', rememberFocus);
+      return;
+    }
+    const savedContext = `${savedSlot.date}|${savedSlot.templateKey}|${savedSlot.status}`;
+    // Chromium blurs a focused button when saving temporarily disables it.
+    // Restore only after the saved menu has rendered and no other focus won.
+    ownerDocument.defaultView.requestAnimationFrame(() => {
+      ownerDocument.removeEventListener('focusin', rememberFocus);
+      if (!movedFocus && opener.isConnected && !opener.disabled
+        && currentContextRef.current === savedContext && ownerDocument.activeElement === ownerDocument.body) {
+        opener.focus({ preventScroll: true });
+      }
+    });
+  }
+
   return (
-    <article className={`meal-plan-day ${planned || cooked ? '' : 'meal-plan-day-muted'}`} aria-label={`${slot.date} 저녁 식단`}>
+    <article ref={node => { currentContextRef.current = node ? selectionContext : null; }} className={`meal-plan-day ${planned || cooked ? '' : 'meal-plan-day-muted'}`} aria-label={`${slot.date} 저녁 식단`}>
       <div className="meal-plan-date">
         <span className="text-sm font-semibold">{DAYS[dayIndex]}요일</span>
         <time dateTime={slot.date} className="text-2xl font-semibold tabular-nums tracking-tight">{shortDate(slot.date)}</time>
@@ -66,15 +108,23 @@ function MealSlot({ slot, dayIndex, ingredients, pantryItems, disabled, overdue,
           </>
         )}
         {!planned && !cooked && <p className="mt-2 text-sm leading-6 muted">{slot.reason || '이 날은 메뉴 추천에서 제외했어요.'}</p>}
+        {!cooked && slot.status !== 'skipped' ? <label className="mt-4 block max-w-sm text-xs font-medium text-slate-700">
+          교체·건너뛰기 이유 (선택)
+          <select className="mt-1 min-h-11 disabled:cursor-not-allowed disabled:opacity-50" value={reasonCode} disabled={disabled || slot.locked}
+            onChange={event => setSelection({ context: selectionContext, reasonCode: event.target.value })}>
+            <option value="">선택하지 않음</option>
+            {MEAL_PLAN_REASON_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+          </select>
+        </label> : null}
         <div className="mt-4 flex flex-wrap gap-2">
           {planned && (
             <>
-              <button className="meal-plan-action" type="button" disabled={disabled || slot.locked || overdue} onClick={onReplace}>메뉴 교체</button>
+              <button className="meal-plan-action" type="button" disabled={disabled || slot.locked || overdue} onClick={event => changeMeal(event, onReplace)}>메뉴 교체</button>
               <button className="meal-plan-action" type="button" disabled={disabled} aria-pressed={slot.locked} onClick={onLock}>{slot.locked ? '고정 해제' : '메뉴 고정'}</button>
               {canChange ? <button className="meal-plan-action" type="button" disabled={disabled || slot.locked} onClick={onMove}>날짜 이동</button> : null}
             </>
           )}
-          {!cooked ? <button className="meal-plan-action" type="button" disabled={disabled || slot.locked} onClick={onSkip}>{slot.status === 'skipped' ? '식단에 포함' : '외식·건너뛰기'}</button> : null}
+          {!cooked ? <button className="meal-plan-action" type="button" disabled={disabled || slot.locked} onClick={event => changeMeal(event, onSkip)}>{slot.status === 'skipped' ? '식단에 포함' : planned && overdue ? '만들지 않았어요' : '외식·건너뛰기'}</button> : null}
           {cooked || (planned && canCook) ? <button className={cooked ? 'meal-plan-action' : 'btn-primary'} type="button" disabled={disabled} onClick={onCook}>{cooked ? '조리 기록 확인' : '만들어 먹었어요'}</button> : null}
         </div>
       </div>
@@ -115,9 +165,9 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
   const canChange = Boolean(confirmedPlan) && !hasDraft;
   const hasRemaining = plan?.slots.some(slot => slot.date >= today && !slot.locked && ['planned', 'empty'].includes(slot.status));
 
-  async function persist(nextPlan, successMessage, save = savePlan) {
+  async function persist(nextPlan, successMessage, save = savePlan, feedback) {
     setNotice('');
-    const savedPlan = await save(nextPlan);
+    const savedPlan = feedback ? await save(nextPlan, feedback) : await save(nextPlan);
     if (savedPlan) {
       setPreferences(savedPlan.preferences);
       setExcludedText(savedPlan.preferences.excludedIngredients.join(', '));
@@ -140,14 +190,30 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
     if (savedPlan) setSettingsOpen(false);
   }
 
-  async function handleReplace(slot) {
+  async function handleReplace(slot, reasonCode) {
     const nextPlan = replaceMealPlanSlot(plan, slot.id, options);
     const nextSlot = nextPlan.slots.find((item) => item.id === slot.id);
     if (nextSlot.templateKey === slot.templateKey) {
-      setNotice('지금 조건에 맞는 다른 메뉴가 없어요. 피하고 싶은 재료를 조정해 보세요.');
+      setNotice(isLocalPilotBuild()
+        ? '검수 기준과 제외 재료 조건에 맞는 다른 메뉴가 없어요. 기존 메뉴를 유지해요.'
+        : '지금 조건에 맞는 다른 메뉴가 없어요. 피하고 싶은 재료를 조정해 보세요.');
       return;
     }
-    await persist(nextPlan, `${shortDate(slot.date)} 메뉴를 바꿨어요.`);
+    return persist(nextPlan, `${shortDate(slot.date)} 메뉴를 바꿨어요.`, savePlan,
+      { slotId: slot.id, changeType: 'replace', reasonCode });
+  }
+
+  async function handleSkip(slot, reasonCode) {
+    const skipping = slot.status !== 'skipped';
+    const nextPlan = setMealPlanSlotSkipped(plan, slot.id, skipping, options);
+    const nextSlot = nextPlan.slots.find(item => item.id === slot.id);
+    if (!skipping && nextSlot.status !== 'planned') {
+      setNotice(nextSlot.notice || nextSlot.reason);
+      return;
+    }
+    const feedback = skipping ? { slotId: slot.id,
+      changeType: slot.status === 'planned' && overdueIds.has(slot.id) ? 'not_cooked' : 'skip', reasonCode } : undefined;
+    return persist(nextPlan, skipping ? '이 날의 저녁은 건너뛰어요.' : '식단에 다시 포함했어요.', savePlan, feedback);
   }
 
   async function handleConfirm() {
@@ -173,6 +239,11 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
 
   return (
     <>
+      {isLocalPilotBuild() ? <aside aria-label="파일럿 메뉴 기준" className="border-l-2 border-brand-500 pl-4 text-sm leading-6 text-slate-700">
+        <h2 className="font-semibold text-slate-900">원문 대조 완료(식재료량) 메뉴로 시작해요</h2>
+        <p className="mt-1">원문 인분과 식재료량을 대조한 단품만 새로 추천해요. 과정 물과 추가 양념은 확인이 필요하며, 기본 양념도 실제 보유량을 확인해 주세요.</p>
+        <p className="mt-1">후보가 적어 같은 메뉴가 반복될 수 있어요. 기존에 저장한 식단은 유지하며, 파일럿 참여 동의와 관계없이 같은 메뉴 기준을 적용해요.</p>
+      </aside> : null}
       <form className="meal-plan-settings" onSubmit={handleGenerate}>
         <details open={settingsOpen} onToggle={(event) => setSettingsOpen(event.currentTarget.open)}>
           <summary className="cursor-pointer text-base font-semibold text-slate-900">
@@ -246,14 +317,15 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
 
       {plan ? (
         <section className="meal-plan-board" aria-label="한 주 저녁 식단표">
+          <p className="text-xs leading-5 muted">이유는 선택 사항이에요. 파일럿 기록에 동의한 경우에만 이 브라우저에 저장해요.</p>
           {plan.slots.map((slot, index) => (
-            <MealSlot key={slot.id} slot={slot} dayIndex={index} ingredients={inventoryError ? [] : ingredients} pantryItems={pantryItems} disabled={busy || settingsDirty}
+            <MealSlot key={`${storageScope}:${weekStart}:${slot.id}`} slot={slot} dayIndex={index} ingredients={inventoryError ? [] : ingredients} pantryItems={pantryItems} disabled={busy || settingsDirty}
               overdue={overdueIds.has(slot.id)}
               canCook={Boolean(confirmedPlan) && !hasDraft} onCook={event => onOpenCooking(slot.id, event.currentTarget)}
               canChange={canChange} onMove={event => onOpenChange('move', slot.id, event.currentTarget)}
-              onReplace={() => handleReplace(slot)}
+              onReplace={reasonCode => handleReplace(slot, reasonCode)}
               onLock={() => persist(toggleMealPlanSlotLock(plan, slot.id), slot.locked ? '메뉴 고정을 해제했어요.' : '다시 추천해도 이 메뉴는 유지해요.')}
-              onSkip={() => persist(setMealPlanSlotSkipped(plan, slot.id, slot.status !== 'skipped', options), slot.status === 'skipped' ? '식단에 다시 포함했어요.' : '이 날의 저녁은 건너뛰어요.')}
+              onSkip={reasonCode => handleSkip(slot, reasonCode)}
             />
           ))}
         </section>

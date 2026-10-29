@@ -1,5 +1,5 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import MealQuantityDetails from '../MealQuantityDetails';
 import { getReviewedDinnerCatalog } from '../../features/mealPlans/reviewedDinnerCatalog';
 import { mealPlanCatalog } from '../../features/mealPlans/mealPlanCatalog';
@@ -8,9 +8,52 @@ function slot(servings = 2) {
   const template = getReviewedDinnerCatalog().templates[0];
   return { ...template, status: 'planned', servings };
 }
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); });
 
 describe('MealQuantityDetails', () => {
+  it('distinguishes a source-compared food quantity from a completely measured cooking process in the pilot', () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
+    const meal = slot();
+    const before = structuredClone(meal);
+    render(<MealQuantityDetails slot={meal} />);
+    expect(screen.getByRole('note', { name: '메뉴 검수 범위' })).toHaveTextContent('원문 대조 완료(식재료량)');
+    expect(screen.getByRole('note', { name: '메뉴 검수 범위' })).toHaveTextContent(/과정 물.*추가 양념.*확인/);
+    expect(screen.getByText(/시금치 데치는 물.*양 확인 필요/)).toBeInTheDocument();
+    expect(screen.getByText('360g')).toBeInTheDocument();
+    expect(meal).toStrictEqual(before);
+  });
+
+  it('labels saved editorial meals without hiding their original unmeasured contents', () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
+    const meal = { ...mealPlanCatalog[0], servings: 2 };
+    const before = structuredClone(meal);
+    render(<MealQuantityDetails slot={meal} />);
+    expect(screen.getByRole('note', { name: '메뉴 검수 범위' })).toHaveTextContent('편집 조합');
+    expect(screen.getByText(/재료별 필요량.*확인되지/)).toBeInTheDocument();
+    expect(meal).toStrictEqual(before);
+  });
+
+  it('does not label an unknown stored source as an editorial or source-reviewed meal', () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
+    const meal = structuredClone({ ...mealPlanCatalog[0], servings: 1 });
+    meal.components[0].source = { kind: 'unreviewed-import', id: 'unknown' };
+    render(<MealQuantityDetails slot={meal} />);
+    expect(screen.getByRole('note', { name: '메뉴 검수 범위' })).toHaveTextContent('미검수');
+    expect(screen.queryByText(/앱 기본 메뉴를 조합한 식단/)).not.toBeInTheDocument();
+  });
+
+  it('does not advertise completed food-quantity review when a stored source row has lost its amount', () => {
+    vi.stubEnv('VITE_LOCAL_PILOT_ENABLED', 'true');
+    const meal = slot();
+    meal.components[0].ingredients[0].amount = null;
+    render(<MealQuantityDetails slot={meal} />);
+    const note = screen.getByRole('note', { name: '메뉴 검수 범위' });
+    expect(note).toHaveTextContent('미검수');
+    expect(note).not.toHaveTextContent('원문 대조 완료');
+    expect(screen.getByText(/밥.*분량 확인 필요/)).toBeInTheDocument();
+    expect(screen.queryByText('360g')).not.toBeInTheDocument();
+  });
+
   it('shows two-person ingredient requirements while preserving the original one-person amounts', () => {
     const meal = slot();
     const before = structuredClone(meal);

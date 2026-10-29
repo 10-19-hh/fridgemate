@@ -9,6 +9,13 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Added
 
+- Added an actual pilot-artifact cooking-to-manual-export browser check, preserving unknown usage without consuming stock and excluding source/private fixture fields. Revalidated the existing local pilot and documented the current source/deployment mismatch, cloud-selected SEO config check and reauthentication gate in `docs/PILOT_PREVIEW_RESUME_2026-10-17.md`; no remote release or participant launch is claimed.
+
+- Added optional fixed-choice reasons for saved meal replacement, skipping and explicitly reported uncooked past confirmed meals. Kept one-time reasons in the consent-gated local pilot export rather than recipe snapshots or lasting preferences, with strict v2 change events and backward-compatible v1 reading. Preserved unanswered choices, failed-save truth, business writes when feedback is invalid, and keyboard focus after replacement. Documented pilot decision criteria, OCR measurement and Preview access/rollback gates in the 2026-10-04 pilot records.
+
+- Added an explicit local-only pilot build policy: new weekly meal candidates are limited to six conditionally source-quantity-reviewed dinners, while ordinary builds and stored historical plans retain the full catalog. Added review-scope notices and kept unmeasured process inputs and original quantities intact. Recorded the approved policy in `docs/PILOT_MENU_REVIEW_POLICY_2026-09-29.md`; this does not constitute full cooking/nutrition review or a deployed participant pilot.
+- Added `build:pilot` with isolated build inputs, separate `dist-pilot` output and client guards against backend, analytics, ads, external AI and remote correction learning. Added an exclusive-output Preview config generator without changing production `vercel.json`; reject Production targets and dotenv-only pilot activation. Preserved local OCR/manual export and documented remote routing, participant URL and rollback checks still required in `docs/PILOT_LOCAL_BUILD_2026-09-29.md`.
+
 - Preserved the 204 pending files in 17 ordered, hash-verified functional commits and retained main's AdSense/exercise documents. Fresh precommit checks passed 2,989 unit/integration tests, 107 browser tests, 48 overlapping built-preview tests, lint and build; recorded release gates separately in `docs/RELEASE_CLOSEOUT_2026-09-29.md` without claiming remote CI, deployment or real-user pilot completion.
 
 - Recorded six real query/commit/rollback checks of the current root Prisma adapter in two fresh, private-socket PostgreSQL 16 fixtures. Preserved the initial sandbox failure and the fifth original SQL migration's missing-pgvector failure; this is not full schema, RLS, Prisma migration-engine, auth or deployment validation. No application/dependency changes; see `docs/PRD_V3_LOCAL_POSTGRES_2026-09-29.md`.
@@ -59,6 +66,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 - Updated recipe-search documentation to separate historical staged-backfill checkpoints from the final 1,166-current-vector state.
 
 ### Fixed
+
+- Keep a skipped legacy dinner unchanged, and show the candidate-policy limitation rather than a restore-success notice, when the pilot has no eligible replacement under the user's exclusions.
 
 - Bound the consent E2E analytics interceptor to HTTPS Google hostnames, and opened offline pilot inputs nonblocking before descriptor validation to avoid a pathname-check/FIFO-open race. Added reproduced spoof-URL and real FIFO regressions while retaining file/link/size/read-integrity/output protections. Recorded the distinct CodeQL result gate and the existing Preview-to-production redirect limitation; deployment settings are unchanged.
 

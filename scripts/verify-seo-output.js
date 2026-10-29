@@ -4,8 +4,9 @@ import { PUBLIC_ROUTES, getRouteMetadata } from '../src/utils/routeMetadata.js';
 import { PUBLIC_RECIPE_PATHS } from '../src/features/recipes/publicRecipeCatalog.js';
 import { getWebmasterVerificationTags } from '../src/utils/webmasterVerification.js';
 import { hasOnlySameOriginExecutableScripts } from './lib/seoHtmlSecurity.js';
+import { getBuildOutputDirectory } from './lib/localPilotBuild.js';
 
-const outputDirectory = resolve(process.cwd(), 'dist');
+const outputDirectory = resolve(process.cwd(), getBuildOutputDirectory());
 const routeOutputFiles = {
   '/': 'index.html',
   '/recipes': '_seo/recipes.html',
@@ -61,7 +62,7 @@ for (const privatePath of privatePaths) {
   assert(!sitemap.includes(`${privatePath}</loc>`), `${privatePath} must not appear in sitemap.xml`);
   assert(hosting.rewrites.some(rule => rule.source === privatePath && rule.destination === '/_seo/app.html'),
     `${privatePath} must serve the functional app shell on direct navigation`);
-  assert(hosting.headers.some(rule => rule.source === privatePath
+  assert(hosting.headers.some(rule => [privatePath, '/(.*)'].includes(rule.source)
     && rule.headers.some(header => header.key.toLowerCase() === 'x-robots-tag' && header.value === 'noindex, nofollow, noarchive')),
   `${privatePath} is missing its private-page response header`);
   assert(robots.split(/\r?\n/).includes(`Disallow: ${privatePath}`), `${privatePath} is missing from robots.txt`);

@@ -89,7 +89,7 @@ describe('overdue confirmed meals through page controls and real IndexedDB', () 
     const past = await openPast();
     expect(past.getByText(/예정 배분 보류/)).toBeInTheDocument();
     expect(past.getByRole('button', { name: '메뉴 교체' })).toBeDisabled();
-    fireEvent.click(past.getByRole('button', { name: '외식·건너뛰기' }));
+    fireEvent.click(past.getByRole('button', { name: '만들지 않았어요' }));
     const confirm = await screen.findByRole('button', { name: '수정 초안으로 확정본 교체' });
     await waitFor(() => expect(confirm).toBeEnabled());
     await overdue().findByRole('button', { name: `${PAST} 식단 확인` });

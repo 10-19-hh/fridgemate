@@ -1,6 +1,7 @@
 // Offline, consent-prepared pilot exports only. This module reads no browser
 // storage, emits no events, and cannot establish consent or anonymity itself.
 import { parsePilotInstant } from './mealPlanPilotPolicy.js';
+import { isMealPlanFeedback } from './mealPlanFeedback.js';
 
 const INVALID = '파일럿 자료의 형식·관측 범위·이벤트 연결을 확인해주세요.';
 const DAY = 86400000;
@@ -84,11 +85,16 @@ function validateSubject(subject, exportedAt) {
 }
 
 function validateEvent(event, subjects, exportedAt) {
-  keys(event, COMMON_EVENT, ['planId', 'slotId', 'reversesEventId', 'plannedSlotCount', 'engineVersion']);
+  const feedbackFields = event?.version === 2 ? ['changeType', 'reasonCode'] : [];
+  keys(event, [...COMMON_EVENT, ...feedbackFields], ['planId', 'slotId', 'reversesEventId', 'plannedSlotCount', 'engineVersion']);
   pseudonym(event.id, 'evt');
   pseudonym(event.subjectId, 'sub');
   pseudonym(event.operationId, 'op');
-  check(event.version === 1 && EVENT_NAMES.has(event.name));
+  check([1, 2].includes(event.version) && EVENT_NAMES.has(event.name));
+  if (event.version === 2) {
+    check(event.name === 'meal_slot_changed' && event.status === 'success'
+      && isMealPlanFeedback(event.changeType, event.reasonCode));
+  }
   check(event.name === 'meal_plan_generation_started' ? event.status === 'started'
     : ['success', 'failure', 'cancelled'].includes(event.status));
   const occurredAt = instant(event.occurredAt);

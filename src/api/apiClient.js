@@ -1,4 +1,5 @@
 import { apiBaseUrl } from '../utils/backendConfig';
+import { isLocalPilotBuild } from '../utils/pilotMode.js';
 import {
   captureAuthContext, createAuthContextChangedError, invalidateAuthContext, isAuthContextCurrent, shareAuthRefresh
 } from '../features/auth/authSessionContext';
@@ -47,6 +48,9 @@ export async function requestJson(
   options = {},
   { authMode = 'auto', errorClass = ApiClientError, allowNoContent = false } = {}
 ) {
+  if (isLocalPilotBuild()) {
+    throw new errorClass('Local pilot builds do not use the server.', { path, code: 'LOCAL_PILOT_ONLY' });
+  }
   const origin = captureAuthContext();
   const protectedRequest = authMode === 'required';
   const refreshRequest = path === '/auth/refresh' && options.method === 'POST';

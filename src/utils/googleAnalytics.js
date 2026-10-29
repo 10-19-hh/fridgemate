@@ -1,4 +1,5 @@
 import { getAnalyticsConsent } from './analyticsConsent';
+import { isLocalPilotBuild } from './pilotMode.js';
 
 const GA_SCRIPT_SELECTOR = 'script[data-fridgemate-ga]';
 const COMMON_EVENT_PARAMETER_KEYS = Object.freeze([
@@ -124,6 +125,7 @@ function clearGoogleAnalyticsCookies() {
 }
 
 export function initializeGoogleAnalytics() {
+  if (isLocalPilotBuild()) return false;
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
   if (getAnalyticsConsent() !== 'granted') return false;
 

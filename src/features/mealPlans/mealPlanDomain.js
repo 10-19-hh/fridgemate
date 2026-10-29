@@ -1,6 +1,8 @@
 import { normalizeIngredientName } from '../ingredients/ingredientDomain.js';
 import { getCompositionHint, getMealFoodGroups } from '../nutrition/foodGroupRules.js';
-import { ACTIVE_MEAL_PLAN_CATALOG_VERSION, getMealPlanCatalog } from './mealPlanCatalog.js';
+import { ACTIVE_MEAL_PLAN_CATALOG_VERSION, getMealPlanCandidates } from './mealPlanCatalog.js';
+import { PILOT_CANDIDATE_POLICY } from './mealPlanReviewPolicy.js';
+import { isLocalPilotBuild } from '../../utils/pilotMode.js';
 
 export { mealPlanCatalog } from './mealPlanCatalog.js';
 
@@ -147,8 +149,20 @@ export function getSlotSummary(slot, ingredients = [], pantryItems = []) {
   return result;
 }
 
-function eligibleTemplates(preferences) {
-  return getMealPlanCatalog().filter((candidate) => !getExcludedNames(candidate.components, preferences.excludedIngredients).length);
+function effectiveCandidatePolicy(requested) {
+  // Only an explicit replay input carries policy across builds. Reading a
+  // previously saved plan never changes the current build's default policy.
+  return requested ?? (isLocalPilotBuild() ? PILOT_CANDIDATE_POLICY : null);
+}
+
+function noCandidateReason(candidatePolicy, defaultReason = NO_CANDIDATE_REASON) {
+  return candidatePolicy === null ? defaultReason
+    : '검수 기준과 제외 재료 조건에 맞는 메뉴가 없어요. 조건을 확인해 주세요.';
+}
+
+function eligibleTemplates(preferences, candidatePolicy) {
+  return getMealPlanCandidates(effectiveCandidatePolicy(candidatePolicy))
+    .filter((candidate) => !getExcludedNames(candidate.components, preferences.excludedIngredients).length);
 }
 
 function tieBreaker(key) {
@@ -176,8 +190,8 @@ function baseSlot(date, servings) {
   };
 }
 
-function plannedSlot(date, servings, candidate, ingredients, pantryItems) {
-  if (!candidate) return { ...baseSlot(date, servings), reason: NO_CANDIDATE_REASON };
+function plannedSlot(date, servings, candidate, ingredients, pantryItems, emptyReason = NO_CANDIDATE_REASON) {
+  if (!candidate) return { ...baseSlot(date, servings), reason: emptyReason };
   const slot = {
     ...baseSlot(date, servings), status: 'planned', templateKey: candidate.key, templateVersion: candidate.version,
     title: candidate.title, components: clone(candidate.components), foodGroups: clone(candidate.foodGroups),
@@ -197,7 +211,7 @@ function confirmedOverdueSlots(confirmedPlan, scope, weekStart, today) {
   return new Map(confirmedPlan.slots.filter(slot => slot.status === 'planned' && slot.date < today).map(slot => [slot.id, slot]));
 }
 
-export function generateMealPlan({ weekStart, preferences, ingredients = [], pantryItems = [], scope = 'guest', previousPlan = null, confirmedPlan = null, now } = {}) {
+export function generateMealPlan({ weekStart, preferences, ingredients = [], pantryItems = [], scope = 'guest', previousPlan = null, confirmedPlan = null, candidatePolicy, now } = {}) {
   const start = getWeekStart(weekStart || new Date());
   const previous = previousPlan?.weekStart === start && previousPlan.scope === scope ? previousPlan : null;
   const normalized = normalizePreferences(preferences || previous?.preferences);
@@ -205,7 +219,8 @@ export function generateMealPlan({ weekStart, preferences, ingredients = [], pan
   const updatedAt = timestamp(now);
   const today = formatCalendarDate(new Date(updatedAt));
   const overdue = confirmedOverdueSlots(confirmedPlan, scope, start, today);
-  const candidates = eligibleTemplates(normalized);
+  const selectionPolicy = effectiveCandidatePolicy(candidatePolicy);
+  const candidates = eligibleTemplates(normalized, selectionPolicy);
   const preservedSlots = (previous?.slots || []).filter((slot, day) => {
     const explicitlyRestored = normalized.dinnerDays.includes(day) && !previous.preferences.dinnerDays.includes(day);
     return slot.status === 'cooked' || slot.locked || (slot.status === 'skipped' && !explicitlyRestored);
@@ -238,7 +253,7 @@ export function generateMealPlan({ weekStart, preferences, ingredients = [], pan
       return { ...baseSlot(date, normalized.servings), status: 'skipped', reason: '이날 저녁은 계획에서 건너뛰었어요.' };
     }
     const candidate = chooseTemplate({ date, candidates, ingredients, pantryItems, usedKeys, revision });
-    const slot = plannedSlot(date, normalized.servings, candidate, ingredients, pantryItems);
+    const slot = plannedSlot(date, normalized.servings, candidate, ingredients, pantryItems, noCandidateReason(selectionPolicy));
     if (candidate) usedKeys.push(candidate.key);
     return slot;
   });
@@ -255,6 +270,7 @@ export function generateMealPlan({ weekStart, preferences, ingredients = [], pan
     id: `week:${start}`, schemaVersion: 1, catalogVersion: ACTIVE_MEAL_PLAN_CATALOG_VERSION,
     engineVersion: 'weekly-dinner-rules-v3',
     generationInput: {
+      ...(selectionPolicy === null ? {} : { candidatePolicy: selectionPolicy }),
       ...clone({
         weekStart: start, scope, preferences: normalized, now: updatedAt,
         ingredients: ingredients.map((item) => item ? {
@@ -290,14 +306,16 @@ export function replaceMealPlanSlot(plan, slotId, { ingredients = [], pantryItem
   if (slot.locked || slot.status === 'skipped') {
     return updateSlot(plan, slotId, (item) => ({ ...item, notice: item.locked ? '고정을 풀면 다른 메뉴로 바꿀 수 있어요.' : '건너뛰기를 해제하면 메뉴를 고를 수 있어요.' }), now);
   }
-  const candidates = eligibleTemplates(plan.preferences).filter((candidate) => candidate.key !== slot.templateKey);
+  const selectionPolicy = effectiveCandidatePolicy();
+  const candidates = eligibleTemplates(plan.preferences, selectionPolicy).filter((candidate) => candidate.key !== slot.templateKey);
   const candidate = chooseTemplate({
     date: slot.date, candidates, ingredients, pantryItems, revision: plan.revision + 1,
     usedKeys: plan.slots.filter((item) => item.id !== slotId && item.status === 'planned').map((item) => item.templateKey),
   });
+  const emptyReason = noCandidateReason(selectionPolicy, '현재 조건에 맞는 다른 메뉴가 없어요. 제외 재료를 조정해 주세요.');
   return updateSlot(plan, slotId, (item) => candidate
     ? plannedSlot(item.date, item.servings, candidate, ingredients, pantryItems)
-    : { ...item, reason: '현재 조건에 맞는 다른 메뉴가 없어요. 제외 재료를 조정해 주세요.', notice: '현재 조건에 맞는 다른 메뉴가 없어요. 제외 재료를 조정해 주세요.' }, now);
+    : { ...item, reason: emptyReason, notice: emptyReason }, now);
 }
 
 export function toggleMealPlanSlotLock(plan, slotId, { now } = {}) {
@@ -309,16 +327,24 @@ export function toggleMealPlanSlotLock(plan, slotId, { now } = {}) {
 export function setMealPlanSlotSkipped(plan, slotId, skipped, { ingredients = [], pantryItems = [], now } = {}) {
   const index = plan.slots.findIndex((item) => item.id === slotId);
   if (index < 0 || plan.slots[index].status === 'cooked' || plan.slots[index].locked) return plan;
+  const selectionPolicy = effectiveCandidatePolicy();
+  const candidates = skipped ? [] : eligibleTemplates(plan.preferences, selectionPolicy);
+  if (!skipped && selectionPolicy !== null && !candidates.length) {
+    return updateSlot(plan, slotId, slot => ({ ...slot, notice: noCandidateReason(selectionPolicy) }), now);
+  }
   const dinnerDays = skipped
     ? plan.preferences.dinnerDays.filter((day) => day !== index)
     : [...new Set([...plan.preferences.dinnerDays, index])].sort((a, b) => a - b);
   return updateSlot(plan, slotId, (slot) => {
     if (skipped) return { ...slot, status: 'skipped', locked: false, notice: null, reason: '이날 저녁은 계획에서 건너뛰었어요.' };
-    if (slot.templateKey && !getExcludedNames(slot.components, plan.preferences.excludedIngredients).length) {
+    const eligibleSnapshot = selectionPolicy === null || candidates.some(candidate => candidate.key === slot.templateKey
+      && candidate.version === slot.templateVersion && candidate.catalogVersion === slot.catalogVersion
+      && JSON.stringify(candidate.components) === JSON.stringify(slot.components));
+    if (slot.templateKey && eligibleSnapshot && !getExcludedNames(slot.components, plan.preferences.excludedIngredients).length) {
       return { ...slot, status: 'planned', locked: false, notice: null, reason: '이전에 골랐던 메뉴를 되살렸어요. 재료와 분량을 다시 확인해 주세요.' };
     }
     const candidate = chooseTemplate({
-      date: slot.date, candidates: eligibleTemplates(plan.preferences), ingredients, pantryItems,
+      date: slot.date, candidates, ingredients, pantryItems,
       usedKeys: plan.slots.filter((item) => item.id !== slotId && item.status === 'planned').map((item) => item.templateKey),
       revision: plan.revision + 1,
     });
@@ -430,14 +456,15 @@ function sameMeal(left, right) {
 }
 
 /** Reuse the rule-based ranking without changing protected meals or writing inventory. */
-export function readjustRemainingMealPlan(plan, { today, ingredients = [], pantryItems = [], now } = {}) {
+export function readjustRemainingMealPlan(plan, { today, ingredients = [], pantryItems = [], candidatePolicy, now } = {}) {
   assertChangeDate(today);
   assertChangePlan(plan);
   const canChange = (slot, index) => slot.date >= today && !slot.locked
     && ['planned', 'empty'].includes(slot.status) && plan.preferences.dinnerDays.includes(index);
-  const candidates = eligibleTemplates(plan.preferences);
+  const selectionPolicy = effectiveCandidatePolicy(candidatePolicy);
+  const candidates = eligibleTemplates(plan.preferences, selectionPolicy);
   if (!plan.slots.some(canChange)) return { plan, changes: [], notices: ['다시 맞출 수 있는 남은 메뉴가 없어 기존 식단을 유지했어요.'] };
-  if (!candidates.length) return { plan, changes: [], notices: [NO_CANDIDATE_REASON, '기존 식단은 그대로 보존했어요.'] };
+  if (!candidates.length) return { plan, changes: [], notices: [noCandidateReason(selectionPolicy), '기존 식단은 그대로 보존했어요.'] };
   const usedKeys = plan.slots.filter((slot, index) => !canChange(slot, index) && ['planned', 'cooked'].includes(slot.status))
     .map(slot => slot.templateKey);
   const changes = [];
@@ -459,6 +486,7 @@ export function readjustRemainingMealPlan(plan, { today, ingredients = [], pantr
   return { plan: { ...structuredClone(plan), slots, revision: plan.revision + 1, updatedAt,
     engineVersion: 'weekly-dinner-rules-v3', catalogVersion: ACTIVE_MEAL_PLAN_CATALOG_VERSION,
     generationInput: structuredClone({ operation: 'readjust-remaining', today, weekStart: plan.weekStart,
+      ...(selectionPolicy === null ? {} : { candidatePolicy: selectionPolicy }),
       scope: plan.scope, preferences: plan.preferences, now: updatedAt,
       ingredients: ingredients.map(item => item ? { name: item.name, normalizedName: item.normalizedName,
         expiryDate: item.expiryDate, consumed: item.consumed, deletedAt: item.deletedAt } : null),

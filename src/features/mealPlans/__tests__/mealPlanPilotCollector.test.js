@@ -57,6 +57,47 @@ describe('local-only pilot operation collector', () => {
       planId: expect.stringMatching(/^plan_[a-f0-9]{32}$/), operationId: expect.stringMatching(/^op_[a-f0-9]{32}$/) });
   });
 
+  it.each([
+    ['replace', 'repetition'], ['skip', 'schedule'], ['not_cooked', 'difficulty'], ['replace', 'not_answered'],
+  ])('stores and exports successful %s feedback using purpose-specific aliases', async (changeType, reasonCode) => {
+    const m = await api();
+    await m.finishMealPlanPilotOperation(await m.beginMealPlanPilotOperation({ scope: 'guest' }), [descriptor()]);
+    const ticket = await m.beginMealPlanPilotOperation({ scope: 'guest' });
+    const feedback = descriptor({ name: 'meal_slot_changed', sourceKey: 'private-change', slotKey: 'private-slot', changeType, reasonCode });
+    delete feedback.plannedSlotCount;
+    expect(await m.finishMealPlanPilotOperation(ticket, [feedback])).toEqual({ status: 'recorded', recordedCount: 1 });
+    const [stored] = await raw();
+    expect(stored.events.map(event => event.version)).toEqual([1, 2]);
+    expect(stored.events[1]).toMatchObject({ version: 2, name: 'meal_slot_changed', status: 'success', changeType, reasonCode,
+      slotId: expect.stringMatching(/^slot_[a-f0-9]{32}$/), planId: expect.stringMatching(/^plan_[a-f0-9]{32}$/) });
+    expect(JSON.stringify(stored)).not.toContain('private-');
+    const exported = await m.prepareMealPlanPilotExport({ scope: 'guest', expectedVersion: m.state.version });
+    expect(exported.schemaVersion).toBe(1);
+    expect(exported.dataset.events.find(event => event.version === 2)).toMatchObject({ changeType, reasonCode });
+    await m.withdrawMealPlanPilotConsent('guest');
+    expect(JSON.stringify(await raw())).not.toMatch(/reasonCode|changeType|evt_|slot_|plan_/);
+  });
+
+  it.each([
+    ['reason without action', { reasonCode: 'repetition' }],
+    ['action without reason', { changeType: 'replace' }],
+    ['unknown action', { changeType: 'private-action', reasonCode: 'repetition' }],
+    ['free-text reason', { changeType: 'replace', reasonCode: 'SECRET_PRIVATE_REASON' }],
+    ['other event', { name: 'meal_cooked_recorded', changeType: 'replace', reasonCode: 'repetition' }],
+    ['failed change', { status: 'failure', changeType: 'replace', reasonCode: 'repetition' }],
+    ['cancelled change', { status: 'cancelled', changeType: 'skip', reasonCode: 'schedule' }],
+    ['free-text field', { changeType: 'replace', reasonCode: 'repetition', reasonText: 'SECRET_PRIVATE_REASON' }],
+  ])('keeps %s out of persisted feedback and marks an observation gap', async (_name, changes) => {
+    const m = await api();
+    const ticket = await m.beginMealPlanPilotOperation({ scope: 'guest' });
+    const feedback = descriptor({ name: 'meal_slot_changed', slotKey: 'private-slot', ...changes });
+    delete feedback.plannedSlotCount;
+    expect(await m.finishMealPlanPilotOperation(ticket, [feedback])).toEqual({ status: 'missing' });
+    expect((await raw())[0].events).toEqual([]);
+    expect(await m.getMealPlanPilotCapture()).toMatchObject({ captureState: 'paused', pendingCount: 1 });
+    expect(JSON.stringify(await raw())).not.toMatch(/SECRET_PRIVATE_REASON|private-action|reasonText/);
+  });
+
   it('links generation start and result with the same operation and plan aliases', async () => {
     const m = await api();
     const ticket = await m.beginMealPlanPilotOperation({ scope: 'guest', startEvent: descriptor({ name: 'meal_plan_generation_started',

@@ -2,9 +2,31 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { confirmMealPlan, getMealPlan, restoreOverdueMealPlanDraft, saveMealPlan } from '../features/mealPlans/mealPlanRepository';
 import { useAuth } from './useAuth';
 import { createMealPlanPilotOperation, runMealPlanPilotAction } from '../features/mealPlans/mealPlanPilotActions';
+import { isMealPlanFeedback } from '../features/mealPlans/mealPlanFeedback';
 
 function emptyState(key) {
   return { key, record: null, loading: true, saving: false, ready: false, error: '' };
+}
+
+function copyFeedback(input) {
+  if (!input || Reflect.ownKeys(input).length !== 3
+    || !['slotId', 'changeType', 'reasonCode'].every(field => Object.hasOwn(input, field))
+    || !isMealPlanFeedback(input.changeType, input.reasonCode)
+    || typeof input.slotId !== 'string') return null;
+  return { slotId: input.slotId, changeType: input.changeType, reasonCode: input.reasonCode };
+}
+
+function slotFeedback(input, before, after, confirmed, occurredAt) {
+  if (!input || input.slotId !== after?.id || before?.status !== 'planned') return {};
+  const replacement = input.changeType === 'replace' && after.status === 'planned'
+    && before.templateKey !== after.templateKey;
+  const skip = after.status === 'skipped' && before.templateKey === after.templateKey;
+  const now = new Date(occurredAt);
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const notCooked = input.changeType === 'not_cooked' && skip
+    && confirmed?.status === 'planned' && confirmed.date < today;
+  return replacement || notCooked || (input.changeType === 'skip' && skip)
+    ? { changeType: input.changeType, reasonCode: input.reasonCode } : {};
 }
 
 export function useMealPlan(weekStart) {
@@ -61,7 +83,7 @@ export function useMealPlan(weekStart) {
     return () => { active = false; };
   }, [authLoading, key, loadAttempt, storageScope, weekStart]);
 
-  const persist = useCallback(async (action, nextPlan) => {
+  const persist = useCallback(async (action, nextPlan, feedback) => {
     const context = renderedContext;
     if (!mountedRef.current || authLoading || contextRef.current !== context
       || context.key !== key || state.key !== key || state.loading || !state.ready
@@ -83,6 +105,9 @@ export function useMealPlan(weekStart) {
       const expectedRevision = state.record?.revision ?? 0;
       const previousPlan = state.record?.draft ?? state.record?.confirmed;
       const copiedPlan = action === 'draft' ? structuredClone(nextPlan) : null;
+      // Capture a one-time choice before opening the asynchronous observation.
+      // Only a matching, committed slot transition may carry it into the export.
+      const copiedFeedback = action === 'draft' ? copyFeedback(feedback) : null;
       const changedSlots = copiedPlan?.slots.filter(slot => {
         const before = previousPlan?.slots.find(item => item.id === slot.id);
         return before && JSON.stringify(before) !== JSON.stringify(slot);
@@ -113,7 +138,12 @@ export function useMealPlan(weekStart) {
           sourceKey: `${name}:${saved.id}@${saved.revision}`,
           plannedSlotCount: committedPlan.slots.filter(slot => slot.status === 'planned').length,
           engineVersion: committedPlan.engineVersion }];
-        return changedSlots.map(slot => ({ ...common, sourceKey: `${name}:${saved.id}@${saved.revision}:${slot.id}`, slotKey: slot.id }));
+        return changedSlots.map(slot => ({ ...common,
+          sourceKey: `${name}:${saved.id}@${saved.revision}:${slot.id}`, slotKey: slot.id,
+          ...slotFeedback(copiedFeedback, previousPlan?.slots.find(item => item.id === slot.id),
+            committedPlan.slots.find(item => item.id === slot.id),
+            state.record?.confirmed?.slots.find(item => item.id === slot.id), saved.updatedAt),
+        }));
       }) : await write();
       if (!record) return null;
       if (mountedRef.current && contextRef.current === context && saveRef.current === operation) {
@@ -135,7 +165,7 @@ export function useMealPlan(weekStart) {
     }
   }, [authLoading, key, renderedContext, state, storageScope, weekStart]);
 
-  const savePlan = useCallback((nextPlan) => persist('draft', nextPlan), [persist]);
+  const savePlan = useCallback((nextPlan, feedback) => persist('draft', nextPlan, feedback), [persist]);
   const generatePlan = useCallback((createPlan) => persist('generate', createPlan), [persist]);
   const confirmPlan = useCallback(() => persist('confirm'), [persist]);
   const restoreOverdueDraft = useCallback(() => persist('restore-overdue'), [persist]);

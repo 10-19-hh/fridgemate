@@ -1,3 +1,5 @@
+import { isLocalPilotBuild } from '../utils/pilotMode.js';
+
 export const EXTERNAL_AI_DISCLOSURE_VERSION = '2026-08-30';
 
 export const EXTERNAL_AI_ACTIONS = Object.freeze({
@@ -8,6 +10,7 @@ export const EXTERNAL_AI_ACTIONS = Object.freeze({
 });
 
 export function isExternalAiUiEnabled() {
+  if (isLocalPilotBuild()) return false;
   return String(import.meta.env.VITE_ENABLE_EXTERNAL_AI_DATA_PROCESSING || '').toLowerCase() === 'true';
 }
 

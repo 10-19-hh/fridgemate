@@ -29,6 +29,60 @@ beforeEach(() => {
   expect(typeof summarize, 'aggregation API must be implemented').toBe('function');
 });
 
+describe('versioned meal change feedback contract', () => {
+  const feedback = fields => event(1, 'meal_slot_changed', '2026-09-07T09:00:00.000Z', '2026-09-07', {
+    version: 2, planId: id('plan', 1), slotId: id('slot', 1), changeType: 'replace', reasonCode: 'repetition', ...fields,
+  });
+
+  it.each(['taste', 'ingredients', 'cost', 'difficulty', 'schedule', 'repetition', 'other', 'not_answered'])(
+    'keeps only the explicit %s reason code on a successful v2 meal change', reasonCode => {
+      expect(validate(dataset([feedback({ reasonCode })])).events[0]).toMatchObject({
+        version: 2, name: 'meal_slot_changed', status: 'success', changeType: 'replace', reasonCode,
+      });
+    });
+
+  it.each(['replace', 'skip', 'not_cooked'])('accepts the explicit %s action without treating it as cooking', changeType => {
+    const input = dataset([feedback({ changeType }), cook(2)]);
+    expect(validate(input).events[0]).toMatchObject({ version: 2, changeType, reasonCode: 'repetition' });
+    expect(week(report(input), '2026-09-07').guest).toEqual({ activeSubjects: 0, activeSlots: 1 });
+  });
+
+  it('reads old v1 meal changes alongside v2 feedback without inferring missing reasons', () => {
+    const old = event(2, 'meal_slot_changed', '2026-09-08T09:00:00.000Z', '2026-09-07', {
+      planId: id('plan', 1), slotId: id('slot', 2),
+    });
+    const checked = validate(dataset([feedback(), old]));
+    expect(checked.schemaVersion).toBe(1);
+    expect(checked.events[1]).toMatchObject({ version: 1, name: 'meal_slot_changed' });
+    expect(checked.events[1]).not.toHaveProperty('changeType');
+    expect(checked.events[1]).not.toHaveProperty('reasonCode');
+  });
+
+  it.each([
+    ['missing action', value => { delete value.changeType; }],
+    ['missing reason', value => { delete value.reasonCode; }],
+    ['unknown action', value => { value.changeType = 'private-action'; }],
+    ['free-text reason', value => { value.reasonCode = 'SECRET_PRIVATE_REASON'; }],
+    ['unknown reason', value => { value.reasonCode = 'time'; }],
+    ['empty reason', value => { value.reasonCode = ''; }],
+    ['null reason', value => { value.reasonCode = null; }],
+    ['reason object', value => { value.reasonCode = { note: 'SECRET_PRIVATE_REASON' }; }],
+    ['failed change', value => { value.status = 'failure'; }],
+    ['cancelled change', value => { value.status = 'cancelled'; }],
+    ['other event', value => { value.name = 'meal_cooked_recorded'; }],
+    ['v1 feedback', value => { value.version = 1; }],
+    ['unknown version', value => { value.version = 3; }],
+    ['free-text field', value => { value.reasonText = 'SECRET_PRIVATE_REASON'; }],
+  ])('rejects %s without exposing private input', (_name, mutate) => {
+    const value = feedback();
+    mutate(value);
+    let error;
+    try { validate(dataset([value])); } catch (caught) { error = caught; }
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).not.toMatch(/SECRET_PRIVATE_REASON|private-action|reasonText/);
+  });
+});
+
 describe('pilot dataset privacy and structural boundaries', () => {
   it('clones and canonicalizes shuffled input without modifying callers', () => {
     const input = dataset([cook(2), cook(1)], [subject(2), subject()]);

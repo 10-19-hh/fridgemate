@@ -2,6 +2,7 @@ import { seedRecipes } from '../../data/seedRecipes.js';
 import { normalizeIngredientName } from '../ingredients/ingredientDomain.js';
 import { FOOD_GROUP_RULE_VERSION, getMealFoodGroups } from '../nutrition/foodGroupRules.js';
 import { getReviewedDinnerCatalog } from './reviewedDinnerCatalog.js';
+import { selectMealPlanCandidates } from './mealPlanReviewPolicy.js';
 
 export const MEAL_PLAN_CATALOG_VERSION = '2026-09-12.1';
 export const ACTIVE_MEAL_PLAN_CATALOG_VERSION = '2026-09-16.2';
@@ -163,4 +164,8 @@ export const mealPlanCatalog = [
 
 export function getMealPlanCatalog() {
   return [...mealPlanCatalog, ...getReviewedDinnerCatalog().templates];
+}
+
+export function getMealPlanCandidates(candidatePolicy = null) {
+  return selectMealPlanCandidates(getMealPlanCatalog(), candidatePolicy);
 }

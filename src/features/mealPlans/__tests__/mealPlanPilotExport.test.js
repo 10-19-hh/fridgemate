@@ -34,6 +34,19 @@ describe('local-only pilot export validation', () => {
     expect(input).toEqual(original);
   });
 
+  it('exports mixed v1 history and v2 not-cooked feedback without adding a cooked meal', () => {
+    const input = envelope('guest');
+    input.dataset.events = [cooking(1, '2026-09-07T09:00:00.000Z', '2026-09-07'), {
+      ...cooking(2, '2026-09-08T09:00:00.000Z', '2026-09-07'), version: 2,
+      name: 'meal_slot_changed', changeType: 'not_cooked', reasonCode: 'repetition',
+    }];
+    const checked = validate(input);
+    expect(checked.schemaVersion).toBe(1);
+    expect(checked.dataset.events[1]).toMatchObject({ version: 2, changeType: 'not_cooked', reasonCode: 'repetition' });
+    expect(checked.dataset.events[0]).not.toHaveProperty('reasonCode');
+    expect(summarize(input, { asOf: EXPORTED }).weekly[0].guestBrowser).toEqual({ activeSubjects: 0, activeSlots: 1 });
+  });
+
   it.each([
     ['unknown envelope field', input => { input.personalNote = 'SECRET_INPUT_VALUE'; }],
     ['wrong envelope version', input => { input.schemaVersion = 2; }],

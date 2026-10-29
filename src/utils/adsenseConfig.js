@@ -1,3 +1,5 @@
+import { isLocalPilotBuild } from './pilotMode.js';
+
 const ADSENSE_CLIENT_PATTERN = /^ca-pub-\d{16}$/;
 const ADSENSE_SLOT_PATTERN = /^\d+$/;
 
@@ -7,10 +9,10 @@ function parseBoolean(value) {
 
 export function getAdSenseConfig(env = import.meta.env) {
   const client = String(env.VITE_ADSENSE_CLIENT || '').trim();
-  const verificationRequested = parseBoolean(
+  const verificationRequested = !isLocalPilotBuild(env) && parseBoolean(
     env.VITE_ADSENSE_VERIFICATION_ENABLED ?? env.VITE_ADSENSE_ENABLED
   );
-  const servingRequested = parseBoolean(env.VITE_ADSENSE_SERVING_ENABLED);
+  const servingRequested = !isLocalPilotBuild(env) && parseBoolean(env.VITE_ADSENSE_SERVING_ENABLED);
   const verificationEnabled = verificationRequested && ADSENSE_CLIENT_PATTERN.test(client);
 
   return {

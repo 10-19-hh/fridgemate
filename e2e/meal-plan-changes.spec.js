@@ -118,7 +118,7 @@ test('AT-18 past confirmed hold survives a skip draft until explicit confirmatio
   await overdue.getByRole('button', { name: `${WEEK} 식단 확인`, exact: true }).click();
   await expect(meal(page).getByText('조리 여부 확인 필요 · 예정 배분 보류', { exact: true })).toBeVisible();
   await expect(meal(page).getByRole('button', { name: '메뉴 교체', exact: true })).toBeDisabled();
-  await meal(page).getByRole('button', { name: '외식·건너뛰기', exact: true }).click();
+  await meal(page).getByRole('button', { name: '만들지 않았어요', exact: true }).click();
   const confirm = page.getByRole('button', { name: '수정 초안으로 확정본 교체', exact: true });
   await expect(confirm).toBeEnabled();
   await expect(overdue.getByRole('button', { name: `${WEEK} 식단 확인`, exact: true })).toBeVisible();

@@ -10,10 +10,11 @@ import { PantryStaplesProvider } from './hooks/usePantryStaples';
 import { MenuDecisionProvider } from './hooks/useMenuDecision';
 import { UserPreferencesProvider } from './hooks/useUserPreferences';
 import { createSentryPrivacyOptions } from './utils/sentryPrivacy';
+import { isLocalPilotBuild } from './utils/pilotMode.js';
 import { purgeExpiredMealPlanPilots } from './features/mealPlans/mealPlanPilotRetention';
 import './index.css';
 
-if (import.meta.env.VITE_SENTRY_DSN) {
+if (!isLocalPilotBuild() && import.meta.env.VITE_SENTRY_DSN) {
   Sentry.init({
     dsn: import.meta.env.VITE_SENTRY_DSN,
     environment: import.meta.env.MODE,
