@@ -16,6 +16,14 @@ const assetCopies = [
     'core/tesseract-core-simd-lstm.wasm.js'
   ],
   [
+    'node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm.js',
+    'core/tesseract-core-relaxedsimd.wasm.js'
+  ],
+  [
+    'node_modules/tesseract.js-core/tesseract-core-relaxedsimd-lstm.wasm.js',
+    'core/tesseract-core-relaxedsimd-lstm.wasm.js'
+  ],
+  [
     'node_modules/@tesseract.js-data/kor/4.0.0_best_int/kor.traineddata.gz',
     'lang/kor.traineddata.gz'
   ],

@@ -4,7 +4,7 @@ import { defineConfig, devices } from '@playwright/test';
 // this gate must exercise the emitted HTML and JavaScript in dist/.
 export default defineConfig({
   testDir: './e2e',
-  testMatch: ['local-only.spec.js', 'seed-setup.spec.js', 'accessibility.spec.js', 'meal-plan.spec.js', 'public-recipes.spec.js'],
+  testMatch: ['local-only.spec.js', 'seed-setup.spec.js', 'accessibility.spec.js', 'meal-plan.spec.js', 'public-recipes.spec.js', 'ocr-real.spec.js'],
   outputDir: './test-results/preview',
   fullyParallel: true,
   workers: 2,
