@@ -20,6 +20,7 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
+    "test:e2e:ocr": "playwright test --config playwright.ocr.config.js",
     "test:e2e:preview": "playwright test --config playwright.preview.config.js",
     "server": "node server/src/index.js",
     "start": "node server/src/index.js",
