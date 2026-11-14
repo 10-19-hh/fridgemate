@@ -73,6 +73,8 @@ and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2
 
 ### Fixed
 
+- Included both Tesseract.js 7 relaxed SIMD core variants in ordinary/pilot same-origin build assets. Added emitted-file checks and an actual-engine preview smoke, plus an explicit deployed-target command. The existing recognition-mocked E2E remains in place. Multi-item extraction failures discovered during verification are preserved separately; this change does not claim receipt accuracy or production recovery. See `docs/OCR_CORE_ASSETS_2026-11-11.md`.
+
 - Keep a skipped legacy dinner unchanged, and show the candidate-policy limitation rather than a restore-success notice, when the pilot has no eligible replacement under the user's exclusions.
 
 - Bound the consent E2E analytics interceptor to HTTPS Google hostnames, and opened offline pilot inputs nonblocking before descriptor validation to avoid a pathname-check/FIFO-open race. Added reproduced spoof-URL and real FIFO regressions while retaining file/link/size/read-integrity/output protections. Recorded the distinct CodeQL result gate and the existing Preview-to-production redirect limitation; deployment settings are unchanged.
