@@ -74,4 +74,46 @@ describe('recommendationSections', () => {
     expect(groups.useSoon).toEqual([]);
     expect(Object.values(groups).flat().some((recipe) => recipe.id === 'browse')).toBe(false);
   });
+
+  it('keeps legacy groups while separating confirmed quantities from ingredient types', () => {
+    const legacy = { id: 'legacy', canMakeNow: true, missingCore: [], score: 80 };
+    const ready = {
+      id: 'quantity-ready', canMakeNow: false, missingCore: ['양파'], score: 0,
+      quantityResult: { status: 'scaled', scaleFactor: 0.000001, requirementsStatus: 'satisfied' }
+    };
+    const groups = splitRecommendationsByReadiness([legacy, ready]);
+
+    expect(groups.ready).toEqual([legacy]);
+    expect(groups.quantityReady).toEqual([ready]);
+    expect(groups.buyOneMore).toEqual([]);
+    expect(ready.canMakeNow).toBe(false);
+  });
+
+  it.each([
+    ['unconfirmed source', { quantitySource: { kind: 'test', id: 'a', version: '1' } }],
+    ['unknown core', { quantityResult: { status: 'needs-confirmation', scaleFactor: null } }],
+    ['unknown seasonings', { quantityResult: { status: 'scaled', scaleFactor: 0.5, requirementsStatus: 'needs-confirmation' } }],
+    ['insufficient seasonings', { quantityResult: { status: 'original', scaleFactor: 1, requirementsStatus: 'insufficient' } }],
+    ['nonfinite scale', { quantityResult: { status: 'scaled', scaleFactor: Infinity, requirementsStatus: 'satisfied' } }],
+    ['enlarged original quantity', { quantityResult: { status: 'original', scaleFactor: 1.01, requirementsStatus: 'satisfied' } }],
+    ['enlarged scaled quantity', { quantityResult: { status: 'scaled', scaleFactor: 2, requirementsStatus: 'satisfied' } }],
+    ['zero disguised as scaled', { quantityResult: { status: 'scaled', scaleFactor: 0, requirementsStatus: 'satisfied' } }]
+  ])('keeps %s out of ready and buy-one-more counts', (_label, quantityFields) => {
+    const candidate = { id: 'a', canMakeNow: true, missingCore: ['양파'], matchedCore: ['돼지고기'], score: 0, ...quantityFields };
+    const groups = splitRecommendationsByReadiness([candidate]);
+
+    expect(groups.quantityNeedsConfirmation).toEqual([candidate]);
+    expect(groups.quantityReady).toEqual([]);
+    expect(groups.ready).toEqual([]);
+    expect(groups.buyOneMore).toEqual([]);
+    expect(groups.useSoon).toEqual([]);
+  });
+
+  it.each(['unavailable', 'invalid'])('separates %s quantities from confirmation requests', (status) => {
+    const candidate = { id: status, canMakeNow: true, quantityResult: { status, scaleFactor: status === 'unavailable' ? 0 : null } };
+    const groups = splitRecommendationsByReadiness([candidate]);
+    expect(groups.quantityUnavailable).toEqual([candidate]);
+    expect(groups.quantityNeedsConfirmation).toEqual([]);
+    expect(groups.ready).toEqual([]);
+  });
 });

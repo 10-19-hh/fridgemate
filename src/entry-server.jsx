@@ -7,6 +7,7 @@ import { IngredientsProvider } from './hooks/useIngredients';
 import { PantryStaplesProvider } from './hooks/usePantryStaples';
 import { MenuDecisionProvider } from './hooks/useMenuDecision';
 import { UserPreferencesProvider } from './hooks/useUserPreferences';
+import RecipeQuantityProvider from './features/recipes/RecipeQuantityProvider';
 
 export function render(pathname) {
   return renderToStaticMarkup(
@@ -17,7 +18,7 @@ export function render(pathname) {
             <UserPreferencesProvider>
               <MenuDecisionProvider>
                 <IngredientsProvider>
-                  <AppServer />
+                  <RecipeQuantityProvider><AppServer /></RecipeQuantityProvider>
                 </IngredientsProvider>
               </MenuDecisionProvider>
             </UserPreferencesProvider>

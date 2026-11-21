@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { lazy, Suspense, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import MealQuantityDetails from '../MealQuantityDetails';
 import { shortDate } from './mealPlanDisplay';
@@ -12,6 +12,7 @@ import {
   toggleMealPlanSlotLock
 } from '../../features/mealPlans/mealPlanDomain';
 
+const MealPlanningPanel = lazy(() => import('../../features/mealPlans/MealPlanningPanel.jsx'));
 const DAYS = ['월', '화', '수', '목', '금', '토', '일'];
 const DEFAULT_PREFERENCES = { servings: 1, excludedIngredients: [], dinnerDays: [0, 1, 2, 3, 4, 5, 6] };
 
@@ -150,12 +151,13 @@ function ConfirmedPlanSummary({ plan }) {
   );
 }
 
-export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStart, storageScope, saving, savePlan, generatePlan, confirmPlan, restoreOverdueDraft, overdueConflicts, today, ingredients, inventoryLoading, inventoryError, pantryItems, editingDisabled, onOpenCooking, onOpenChange }) {
+export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStart, storageScope, saving, savePlan, generatePlan, confirmPlan, restoreOverdueDraft, overdueConflicts, today, ingredients, inventoryLoading, inventoryError, pantryItems, inventoryScopeReady, editingDisabled, onOpenCooking, onOpenChange }) {
   const confirmationHeadingRef = useRef(null);
   const [preferences, setPreferences] = useState(() => plan?.preferences || DEFAULT_PREFERENCES);
   const [excludedText, setExcludedText] = useState(() => preferences.excludedIngredients.join(', '));
   const [notice, setNotice] = useState('');
   const [settingsOpen, setSettingsOpen] = useState(() => !plan);
+  const [quantityOpen, setQuantityOpen] = useState(false);
   const currentPreferences = { ...preferences, excludedIngredients: parseExcludedIngredients(excludedText) };
   const settingsDirty = Boolean(plan) && JSON.stringify(currentPreferences) !== JSON.stringify(plan.preferences);
   const busy = saving || inventoryLoading || Boolean(inventoryError) || editingDisabled;
@@ -339,6 +341,16 @@ export default function MealPlanEditor({ plan, confirmedPlan, hasDraft, weekStar
           <Link to="/ingredients" className="mt-4 text-sm font-semibold text-brand-700 underline underline-offset-4">냉장고 재료부터 확인하기</Link>
         </section>
       )}
+      {canChange && <section className="border-t border-brand-100 pt-5" aria-label="추가 반찬 계획 열기">
+        <button type="button" className="meal-plan-action" aria-expanded={quantityOpen}
+          disabled={busy || settingsDirty || !inventoryScopeReady} onClick={() => setQuantityOpen((value) => !value)}>
+          {quantityOpen ? '정량 반찬 계획 접기' : '정량 반찬 계획 펼치기'}
+        </button>
+        <p className="mt-2 text-xs leading-5 muted">확인한 보유량을 여러 날에 나눠 쓰는 반찬 계획이에요. 기본 저녁 메뉴의 미검수 분량은 포함하지 않아요.</p>
+        {quantityOpen && !busy && !settingsDirty && inventoryScopeReady && <Suspense fallback={<p role="status" className="mt-3 text-sm">정량 반찬 계획을 열고 있어요.</p>}>
+          <MealPlanningPanel key={`${confirmedPlan.revision}:${JSON.stringify(ingredients)}`} scope={storageScope} weekStart={weekStart} />
+        </Suspense>}
+      </section>}
     </>
   );
 }

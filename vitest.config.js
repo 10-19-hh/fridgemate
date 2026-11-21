@@ -1,10 +1,10 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.js',
-    exclude: ['e2e/**', 'node_modules/**', 'dist/**', 'dist-pilot/**']
+    exclude: [...configDefaults.exclude, 'e2e/**', 'dist/**', 'dist-pilot/**', '**/.worktrees/**']
   }
 });

@@ -1,5 +1,5 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
-import { createElement } from 'react';
+import { createElement, useLayoutEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getRemainingDays } from '../../utils/date.js';
 
@@ -164,6 +164,32 @@ describe('useIngredients', () => {
   afterEach(() => {
     cleanup();
     vi.restoreAllMocks();
+  });
+
+  it('labels the inventory owner during the first render of an account transition', async () => {
+    vi.resetModules();
+    const { IngredientsProvider, useIngredients } = await import('../useIngredients.js');
+    const snapshots = [];
+    const privateItems = [createIngredient('private', { name: 'private ingredient' })];
+    setAuthenticatedMode();
+    dbMocks.getAllIngredients.mockImplementation(async ({ scope }) => scope === 'user:user-1' ? privateItems : []);
+    const { result, rerender } = renderHook(() => {
+      const inventory = useIngredients();
+      const authScope = authState.storageScope;
+      useLayoutEffect(() => {
+        snapshots.push({ authScope, inventoryScope: inventory.inventoryScope, items: inventory.ingredients });
+      }, [authScope, inventory]);
+      return inventory;
+    }, { wrapper: ({ children }) => createElement(IngredientsProvider, null, children) });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.inventoryScope).toBe('user:user-1');
+    setGuestMode();
+    rerender();
+    await waitFor(() => expect(result.current.inventoryScope).toBe('guest'));
+    for (const snapshot of snapshots.filter((item) => item.authScope === 'guest' && item.items.length)) {
+      expect(snapshot.inventoryScope).toBe('user:user-1');
+    }
+    expect(result.current.ingredients).toEqual([]);
   });
 
   describe('basic CRUD flow', () => {

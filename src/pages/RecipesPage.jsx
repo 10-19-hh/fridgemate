@@ -12,6 +12,9 @@ import { useAnalytics } from '../hooks/useAnalytics';
 import { useDBRecommendations } from '../hooks/useDBRecommendations';
 import { useRecipesPageModel } from '../hooks/useRecipesPageModel';
 import { isExternalAiUiEnabled } from '../api/externalAiRequest';
+import { getQuantityRecommendationRecipes } from '../features/recipes/quantityRecommendationCatalog';
+
+const quantityRecipeLinks = getQuantityRecommendationRecipes();
 
 function RecipesPage() {
   const { trackEvent } = useAnalytics();
@@ -32,6 +35,7 @@ function RecipesPage() {
     loading,
     readError,
     loadIngredients,
+    recommendationError,
     ingredients,
     summary,
     missingBasicIngredients,
@@ -40,6 +44,9 @@ function RecipesPage() {
     readyRecommendations,
     buyOneRecommendations,
     useSoonRecommendations,
+    quantityReadyRecommendations,
+    quantityNeedsConfirmationRecommendations,
+    quantityUnavailableRecommendations,
     ownedPantryCount,
     fridgeInsight,
     sectionStats
@@ -106,24 +113,34 @@ function RecipesPage() {
       />
 
       {readError ? <InventoryReadError loading={loading} onRetry={loadIngredients} /> : null}
+      <section className="space-y-3 rounded-lg border border-[#557259]/25 bg-[#f8faf8] p-4 sm:p-5" aria-label="보유량으로 분량 맞추기">
+        <h2 className="text-xl font-semibold text-[#243428]">보유량으로 분량 맞추기</h2>
+        <p className="max-w-prose text-sm leading-6 text-[#566258]">원문 인분·본재료 양을 AI가 대조한 {quantityRecipeLinks.length}개 요리부터 시작해요. 실조리·영양 전문가 검증이나 한 끼 전체의 분량 보장은 아니에요.</p>
+        <ul className="divide-y divide-[#557259]/15">
+          {quantityRecipeLinks.map((recipe) => <li key={recipe.id}>
+            <Link to={recipe.publicRecipePath} className="flex min-h-11 items-center py-3 text-sm font-semibold text-[#243428] underline decoration-[#557259]/40 underline-offset-4 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#557259]">{recipe.title}</Link>
+          </li>)}
+        </ul>
+        <p className="text-sm leading-6 text-[#566258]">이번 요리에 쓸 양을 확인하면 아래 추천 목록에도 표시돼요. 다른 요리나 주간 식단에 쓸 재고를 예약하지는 않습니다.</p>
+      </section>
 
       {hasInventory ? <>
       <section className="stats-grid">
         <StatCard
-          label={'\uC9C0\uAE08 \uB9CC\uB4E4 \uC218 \uC788\uC5B4\uC694'}
+          label="재료 종류 일치"
           value={sectionStats.ready.value}
           helper={sectionStats.ready.helper}
           emptyMessage={recommendationEmptyMessage}
         />
         <StatCard
-          label={'\uD558\uB098\uB9CC \uB354 \uC0AC\uBA74 \uB3FC\uC694'}
+          label="본재료 한 종류 부족"
           value={sectionStats.buyOne.value}
           tone="warning"
           helper={sectionStats.buyOne.helper}
           emptyMessage={recommendationEmptyMessage}
         />
         <StatCard
-          label={'\uBE68\uB9AC \uC368\uC57C \uD560 \uC7AC\uB8CC \uC911\uC2EC'}
+          label="활용할 재료가 있는 후보"
           value={sectionStats.useSoon.value}
           tone="danger"
           helper={sectionStats.useSoon.helper}
@@ -187,11 +204,22 @@ function RecipesPage() {
         </div>
       </section>
 
+      <section id="recipe-recommendations" aria-label="분량 확인 상태" className="space-y-2 border-l-2 border-[#557259] pl-4 text-sm leading-6 text-[#566258]">
+        <h2 className="text-lg font-semibold text-[#243428]">확인한 분량은 따로 볼게요</h2>
+        <div className="flex flex-wrap gap-x-5 gap-y-1" aria-live="polite">
+          <p>필수 재료량 확인 {loading ? '…' : quantityReadyRecommendations.length}개</p>
+          <p>추가 확인 필요 {loading ? '…' : quantityNeedsConfirmationRecommendations.length}개</p>
+          <p>사용량 없음·계산 불가 {loading ? '…' : quantityUnavailableRecommendations.length}개</p>
+        </div>
+        <p>위의 재료 종류 집계와 중복하지 않아요. 본재료를 줄일 수 있어도 양념이 미확인이면 추가 확인에 포함됩니다.</p>
+      </section>
+
       <RecommendationRow
         title={'재료 기반 추천'}
         description={'보유 재료와 양념을 비교해 메뉴를 정렬했어요. 필요한 재료와 조리법을 함께 확인하세요.'}
         recipes={localRecommendations}
         loading={loading}
+        error={recommendationError}
         source="rule"
         onRecipeSelect={handleRecommendationSelect('local')}
         emptyTitle={'아직 추천할 레시피가 없어요'}

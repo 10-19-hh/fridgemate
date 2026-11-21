@@ -12,6 +12,7 @@ import { UserPreferencesProvider } from './hooks/useUserPreferences';
 import { createSentryPrivacyOptions } from './utils/sentryPrivacy';
 import { isLocalPilotBuild } from './utils/pilotMode.js';
 import { purgeExpiredMealPlanPilots } from './features/mealPlans/mealPlanPilotRetention';
+import RecipeQuantityProvider from './features/recipes/RecipeQuantityProvider';
 import './index.css';
 
 if (!isLocalPilotBuild() && import.meta.env.VITE_SENTRY_DSN) {
@@ -41,7 +42,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             <UserPreferencesProvider>
               <MenuDecisionProvider>
                 <IngredientsProvider>
-                  <App />
+                  <RecipeQuantityProvider><App /></RecipeQuantityProvider>
                 </IngredientsProvider>
               </MenuDecisionProvider>
             </UserPreferencesProvider>

@@ -231,6 +231,7 @@ export function IngredientsProvider({ children }) {
 
   const value = useMemo(
     () => ({
+      inventoryScope: storageScope,
       ingredients: displayScope === storageScope ? ingredients : scopeSnapshotReady ? initialScopeState.items : [],
       loading: displayScope === storageScope ? loading : !scopeSnapshotReady,
       isSyncing: displayScope === storageScope && isSyncing,

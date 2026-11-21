@@ -3,7 +3,7 @@ import { getInventorySourceToken, invalidateInventoryQuantityReview } from '../f
 
 const DB_NAME_PREFIX = 'fridgemate-db';
 // Version 2 existed with menu decisions on main and meal plans on the feature branch.
-const DB_VERSION = 7;
+const DB_VERSION = 8;
 const INGREDIENT_STORE_NAME = 'ingredients';
 const MENU_DECISION_STORE_NAME = 'menuDecisions';
 const MEAL_PLAN_STORE_NAME = 'mealPlans';
@@ -11,6 +11,7 @@ const INVENTORY_QUANTITY_STORE_NAME = 'inventoryQuantities';
 const SHOPPING_STORE_NAME = 'shoppingEntries';
 const INVENTORY_EVENT_STORE_NAME = 'inventoryEvents';
 const MEAL_PLAN_PILOT_STORE_NAME = 'mealPlanPilot';
+const MEAL_PLANNING_STATE_STORE_NAME = 'mealPlanningState';
 const DEFAULT_SCOPE = 'guest';
 const databasePromises = new Map();
 
@@ -74,6 +75,9 @@ function openDatabase(scopeOrOptions) {
         }
         if (!database.objectStoreNames.contains(MEAL_PLAN_PILOT_STORE_NAME)) {
           database.createObjectStore(MEAL_PLAN_PILOT_STORE_NAME, { keyPath: 'id' });
+        }
+        if (!database.objectStoreNames.contains(MEAL_PLANNING_STATE_STORE_NAME)) {
+          database.createObjectStore(MEAL_PLANNING_STATE_STORE_NAME, { keyPath: 'id' });
         }
       };
 
@@ -187,12 +191,62 @@ export function runMealCookingTransaction(mode, handler, scopeOrOptions) {
   });
 }
 
+// Plan records and quantity approvals commit together so a changed slot cannot leave stale approvals.
+export function runMealPlanRecordTransaction(mode, handler, scopeOrOptions) {
+  return runLinkedStoreTransaction({
+    mealPlans: MEAL_PLAN_STORE_NAME, events: INVENTORY_EVENT_STORE_NAME, planning: MEAL_PLANNING_STATE_STORE_NAME
+  }, mode, handler, scopeOrOptions, {
+    failed: '식단 저장에 실패했습니다.', aborted: '식단 저장이 취소됐습니다.'
+  });
+}
+
 export function runInventoryQuantityTransaction(mode, handler, scopeOrOptions) {
   return runLinkedStoreTransaction({
     ingredients: INGREDIENT_STORE_NAME, quantities: INVENTORY_QUANTITY_STORE_NAME
   }, mode, handler, scopeOrOptions, {
     failed: '재고량 저장에 실패했습니다.', aborted: '재고량 저장이 취소됐습니다.'
   });
+}
+
+// Keep the handler synchronous; request callbacks may update its returned result holder.
+export function runMealPlanningTransaction(mode, handler, scopeOrOptions) {
+  return openDatabase(scopeOrOptions).then((database) => new Promise((resolve, reject) => {
+    const transaction = database.transaction(
+      [INGREDIENT_STORE_NAME, MEAL_PLAN_STORE_NAME, MEAL_PLANNING_STATE_STORE_NAME], mode
+    );
+    let response;
+    let handlerError;
+    let handlerFailed = false;
+
+    transaction.oncomplete = () => resolve(response?.result);
+    transaction.onerror = () => reject(handlerFailed ? handlerError
+      : transaction.error || new Error('로컬 저장에 실패했습니다. 다시 시도해주세요.'));
+    transaction.onabort = () => reject(handlerFailed ? handlerError
+      : transaction.error || new Error('로컬 저장이 취소됐습니다. 다시 시도해주세요.'));
+
+    try {
+      response = handler({
+        ingredients: transaction.objectStore(INGREDIENT_STORE_NAME),
+        mealPlans: transaction.objectStore(MEAL_PLAN_STORE_NAME),
+        mealPlanningState: transaction.objectStore(MEAL_PLANNING_STATE_STORE_NAME)
+      }, transaction);
+      if (response && typeof response.then === 'function') {
+        // The transaction cannot remain open across arbitrary async work. Abort
+        // queued writes instead of reporting a premature successful commit.
+        Promise.resolve(response).catch(() => {});
+        throw new TypeError('식단 저장 작업은 동기 콜백과 저장소 요청 콜백으로 처리해야 합니다.');
+      }
+    } catch (error) {
+      handlerFailed = true;
+      handlerError = error;
+      try {
+        transaction.abort();
+      } catch {
+        // The handler may already have aborted. Preserve its original error.
+        reject(error);
+      }
+    }
+  }));
 }
 
 export function readMealPlanningSnapshot(scopeOrOptions) {
@@ -228,16 +282,24 @@ export function clearMealPlans(scopeOrOptions) {
 export function clearAccountLocalData(scopeOrOptions) {
   return openDatabase(scopeOrOptions).then((database) => new Promise((resolve, reject) => {
     const transaction = database.transaction(
-      [INGREDIENT_STORE_NAME, MENU_DECISION_STORE_NAME, MEAL_PLAN_STORE_NAME, INVENTORY_QUANTITY_STORE_NAME, SHOPPING_STORE_NAME, INVENTORY_EVENT_STORE_NAME, MEAL_PLAN_PILOT_STORE_NAME],
+      [INGREDIENT_STORE_NAME, MENU_DECISION_STORE_NAME, MEAL_PLAN_STORE_NAME, INVENTORY_QUANTITY_STORE_NAME, SHOPPING_STORE_NAME, INVENTORY_EVENT_STORE_NAME, MEAL_PLAN_PILOT_STORE_NAME, MEAL_PLANNING_STATE_STORE_NAME],
       'readwrite'
     );
-    transaction.objectStore(INGREDIENT_STORE_NAME).clear();
-    transaction.objectStore(MENU_DECISION_STORE_NAME).clear();
-    transaction.objectStore(MEAL_PLAN_STORE_NAME).clear();
-    transaction.objectStore(INVENTORY_QUANTITY_STORE_NAME).clear();
-    transaction.objectStore(SHOPPING_STORE_NAME).clear();
-    transaction.objectStore(INVENTORY_EVENT_STORE_NAME).clear();
-    transaction.objectStore(MEAL_PLAN_PILOT_STORE_NAME).clear();
+    try {
+      transaction.objectStore(INGREDIENT_STORE_NAME).clear();
+      transaction.objectStore(MENU_DECISION_STORE_NAME).clear();
+      transaction.objectStore(MEAL_PLAN_STORE_NAME).clear();
+      transaction.objectStore(INVENTORY_QUANTITY_STORE_NAME).clear();
+      transaction.objectStore(SHOPPING_STORE_NAME).clear();
+      transaction.objectStore(INVENTORY_EVENT_STORE_NAME).clear();
+      transaction.objectStore(MEAL_PLAN_PILOT_STORE_NAME).clear();
+      transaction.objectStore(MEAL_PLANNING_STATE_STORE_NAME).clear();
+    } catch (error) {
+      // One failed clear must not commit the other private stores.
+      transaction.abort();
+      reject(error);
+      return;
+    }
     transaction.oncomplete = () => resolve();
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error || new Error('로컬 데이터 삭제가 취소됐습니다.'));

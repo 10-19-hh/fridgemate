@@ -1,7 +1,18 @@
-import { readMealPlanningSnapshot, runMealCookingTransaction, runMealPlanTransaction } from '../../db/indexedDB';
+import { readMealPlanningSnapshot, runMealPlanRecordTransaction, runMealPlanTransaction } from '../../db/indexedDB';
 import { assertInventoryQuantityReview, projectInventoryQuantity } from './inventoryQuantityDomain';
 import { assertMealCookingHistory, isMealCookingEventId } from './mealCookingEvents';
 import { assertMealPlanExclusions } from './mealPlanDomain';
+import { assertPlanLocksPreserved, reconcilePlanningCommitments } from './mealPlanningBindings.js';
+
+// Only plans with active quantity approvals need reconciliation; ordinary saves stay independent of that state.
+function hasActiveCommitments(state, plan) {
+  return Boolean(plan && state?.commitments?.some((item) => item.planId === plan.id && item.status === 'active'));
+}
+
+function emptyPlanningState(scope) {
+  return { id: 'state', schemaVersion: 1, scope, revision: 0,
+    stockInventoryBasis: null, stockConfirmations: [], commitments: [] };
+}
 
 const SCHEMA_VERSION = 1;
 const RECORD_SCHEMA_VERSION = 2;
@@ -267,10 +278,11 @@ async function updateRecord(weekStart, scope, expectedRevision, update) {
   let saved;
 
   try {
-    await runMealCookingTransaction('readwrite', ({ mealPlans, events }, transaction) => {
+    await runMealPlanRecordTransaction('readwrite', ({ mealPlans, events, planning }, transaction) => {
       const request = mealPlans.get(`week:${weekStart}`);
       const historyRequest = events.getAll();
-      let remaining = 2;
+      const stateRequest = planning.get('state');
+      let remaining = 3;
       const ready = () => {
         remaining -= 1;
         if (remaining) return;
@@ -286,6 +298,12 @@ async function updateRecord(weekStart, scope, expectedRevision, update) {
           // A cleared plan does not clear cooking history. Read that history in
           // the same transaction so ordinary saves cannot resurrect its demand.
           assertActiveCookingPreserved(saved, historyRequest.result, scope);
+          // Quantity side-dish approvals follow the confirmed plan; a changed slot suspends them atomically.
+          if (hasActiveCommitments(stateRequest.result, current?.confirmed)) {
+            const previousState = stateRequest.result || emptyPlanningState(scope);
+            const nextState = reconcilePlanningCommitments(previousState, current.confirmed, saved.confirmed ?? null, { enforceLocks: false });
+            if (nextState.revision !== previousState.revision) planning.put(nextState);
+          }
           mealPlans.put(saved);
         } catch (error) {
           validationError = error;
@@ -294,6 +312,7 @@ async function updateRecord(weekStart, scope, expectedRevision, update) {
       };
       request.onsuccess = ready;
       historyRequest.onsuccess = ready;
+      stateRequest.onsuccess = ready;
     }, scope);
   } catch (error) {
     throw validationError || error;
@@ -337,6 +356,7 @@ export async function saveMealPlan(plan, scope = 'guest', expectedRevision) {
   return updateRecord(snapshot.weekStart, resolvedScope, expectedRevision, (current, revision, now) => {
     assertCookingPreserved(current, snapshot);
     assertOverdueDemandPreserved(current, snapshot);
+    if (current?.draft) assertPlanLocksPreserved(current.draft, snapshot);
     return {
       id: snapshot.id, schemaVersion: RECORD_SCHEMA_VERSION, scope: resolvedScope, weekStart: snapshot.weekStart,
       revision, createdAt: current?.createdAt ?? now, updatedAt: now,
@@ -380,6 +400,35 @@ export async function restoreOverdueMealPlanDraft(weekStart, scope = 'guest', ex
   });
 }
 
-export function clearMealPlans(scope = 'guest') {
-  return runMealPlanTransaction('readwrite', (store) => store.clear(), resolveScope(scope));
+export async function clearMealPlans(scope = 'guest') {
+  const resolvedScope = resolveScope(scope);
+  let validationError;
+  try {
+    return await runMealPlanRecordTransaction('readwrite', ({ mealPlans, planning: mealPlanningState }, transaction) => {
+      const plansRequest = mealPlans.getAll();
+      const stateRequest = mealPlanningState.get('state');
+      let pending = 2;
+      const onRead = () => {
+        pending -= 1;
+        if (pending) return;
+        try {
+          let nextState = stateRequest.result || emptyPlanningState(resolvedScope);
+          for (const record of plansRequest.result) {
+            const checked = assertMealPlanRecord(record, resolvedScope, record.weekStart);
+            if (hasActiveCommitments(nextState, checked.confirmed)) nextState = reconcilePlanningCommitments(nextState, checked.confirmed, null, { enforceLocks: false });
+          }
+          if (stateRequest.result && nextState.revision !== stateRequest.result.revision) mealPlanningState.put(nextState);
+          mealPlans.clear();
+        } catch (error) {
+          validationError = error;
+          transaction.abort();
+        }
+      };
+      plansRequest.onsuccess = onRead;
+      stateRequest.onsuccess = onRead;
+      return { result: undefined };
+    }, resolvedScope);
+  } catch (error) {
+    throw validationError || error;
+  }
 }

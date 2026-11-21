@@ -30,11 +30,24 @@ async function loadIndexedDbModule() {
   return import('../indexedDB.js');
 }
 
-function openRawDatabase(name) {
+function openRawDatabase(options = {}) {
+  const { version, upgrade, name = 'fridgemate-db__guest' } = typeof options === 'string' ? { name: options } : options;
   return new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(name);
+    const request = window.indexedDB.open(name, version);
+    request.onupgradeneeded = () => upgrade?.(request.result);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('Test database connection was not released'));
+  });
+}
+
+function rawTransaction(database, storeNames, mode, handler) {
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(storeNames, mode);
+    const result = handler(transaction);
+    transaction.oncomplete = () => resolve(result?.result);
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error || new Error('Test transaction aborted'));
   });
 }
 
@@ -47,6 +60,22 @@ async function writeRawIngredient(databaseName, ingredient) {
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
       transaction.onabort = () => reject(transaction.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function readRawPlanningSnapshot(name) {
+  const database = await openRawDatabase({ name });
+  try {
+    return await rawTransaction(database, ['ingredients', 'mealPlans', 'mealPlanningState'], 'readonly', (transaction) => {
+      const holder = { result: {} };
+      for (const storeName of ['ingredients', 'mealPlans', 'mealPlanningState']) {
+        const request = transaction.objectStore(storeName).getAll();
+        request.onsuccess = () => { holder.result[storeName] = request.result; };
+      }
+      return holder;
     });
   } finally {
     database.close();
@@ -121,7 +150,7 @@ describe('indexedDB utilities', () => {
     await db.getAllIngredients();
     const current = await openRawDatabase('fridgemate-db__guest');
     try {
-      expect(current.version).toBe(7);
+      expect(current.version).toBe(8);
       expect(current.objectStoreNames.contains('mealPlanPilot')).toBe(true);
       const contents = await new Promise((resolve, reject) => {
         const transaction = current.transaction([...names, 'mealPlanPilot']);
@@ -242,8 +271,8 @@ describe('indexedDB utilities', () => {
     expect(await db.readMealPlanningSnapshot('guest')).toEqual({ ingredients: [ingredient], mealPlans: [plan], quantityReviews: [] });
     expect(await db.getMenuDecision('2026-09-14')).toEqual(decision);
     const upgraded = await openRawDatabase('fridgemate-db__guest');
-    expect(upgraded.version).toBe(7);
-    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
+    expect(upgraded.version).toBe(8);
+    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlanningState', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
     upgraded.close();
   });
 
@@ -275,8 +304,8 @@ describe('indexedDB utilities', () => {
     expect(await db.readMealPlanningSnapshot()).toEqual({ ingredients: [ingredient], mealPlans: [mealPlan], quantityReviews: [quantityReview] });
     expect(await db.getMenuDecision(menuDecision.decisionDate)).toEqual(menuDecision);
     const upgraded = await openRawDatabase('fridgemate-db__guest');
-    expect(upgraded.version).toBe(7);
-    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
+    expect(upgraded.version).toBe(8);
+    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlanningState', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
     upgraded.close();
     expect(db.runShoppingTransaction).toBeTypeOf('function');
     expect(await db.runShoppingTransaction('readonly', (store) => store.getAll())).toEqual([]);
@@ -466,7 +495,7 @@ describe('indexedDB utilities', () => {
     });
     expect(stored).toEqual([active, consumed, tombstone]);
     expect(await db.runMealPlanTransaction('readonly', (store) => store.getAll())).toEqual([guestPlan]);
-    expect(raw.version).toBe(7);
+    expect(raw.version).toBe(8);
     raw.close();
     guest.ingredients[0].quantity = 'mutated only in the returned snapshot';
     expect((await db.readMealPlanningSnapshot('guest')).ingredients[0].quantity).toBe('반 모');
@@ -811,5 +840,273 @@ describe('indexedDB utilities', () => {
     } finally {
       blockingConnection.close();
     }
+  });
+});
+
+describe('meal planning storage foundation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('upgrades a v2 database without changing existing inventory, plan snapshots or indexes', async () => {
+    const db = await loadIndexedDbModule();
+    const old = await openRawDatabase({ version: 2, upgrade(database) {
+      const ingredients = database.createObjectStore('ingredients', { keyPath: 'id' });
+      ingredients.createIndex('expiryDate', 'expiryDate');
+      ingredients.createIndex('category', 'category');
+      ingredients.createIndex('storageType', 'storageType');
+      database.createObjectStore('mealPlans', { keyPath: 'id' });
+    } });
+    const ingredient = createIngredient('old-tofu', {
+      quantity: '반 모', memo: '수동 장보기 메모', consumed: true,
+      deletedAt: null, privateMetadata: { keep: ['unknown', null] },
+    });
+    const plan = { id: 'week:2026-09-14', schemaVersion: 1, revision: 7, slots: [{ locked: true }], extra: 'keep' };
+    await rawTransaction(old, ['ingredients', 'mealPlans'], 'readwrite', (transaction) => {
+      transaction.objectStore('ingredients').put(ingredient);
+      transaction.objectStore('mealPlans').put(plan);
+    });
+    old.close();
+
+    expect(await db.getIngredientById('old-tofu')).toEqual(ingredient);
+    expect(await db.runMealPlanTransaction('readonly', (store) => store.get(plan.id))).toEqual(plan);
+    const upgraded = await openRawDatabase();
+    try {
+      expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlanningState', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
+      const transaction = upgraded.transaction(['ingredients', 'mealPlanningState']);
+      expect(Array.from(transaction.objectStore('ingredients').indexNames)).toEqual(['category', 'expiryDate', 'storageType']);
+      expect(transaction.objectStore('mealPlanningState').keyPath).toBe('id');
+      expect(await rawTransaction(upgraded, 'mealPlanningState', 'readonly', (read) => read.objectStore('mealPlanningState').getAll())).toEqual([]);
+    } finally {
+      upgraded.close();
+    }
+  });
+
+  it('commits all three stores before resolving the result holder updated by request callbacks', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    const events = [];
+    const result = await db.runMealPlanningTransaction('readwrite', (stores, transaction) => {
+      events.push('handler');
+      transaction.addEventListener('complete', () => events.push('commit'));
+      const holder = { result: null };
+      const read = stores.mealPlanningState.get('state');
+      read.onsuccess = () => {
+        events.push('read');
+        stores.ingredients.put({ id: 'stock', quantity: '반 모' });
+        stores.mealPlans.put({ id: 'week:2026-09-14', revision: 3 });
+        stores.mealPlanningState.put({ id: 'state', revision: 1 });
+        holder.result = { saved: true, revision: 1 };
+      };
+      events.push('return');
+      return holder;
+    });
+    events.push('resolved');
+
+    expect(events).toEqual(['handler', 'return', 'read', 'commit', 'resolved']);
+    expect(result).toEqual({ saved: true, revision: 1 });
+    expect(await readRawPlanningSnapshot()).toEqual({
+      ingredients: [{ id: 'stock', quantity: '반 모' }],
+      mealPlans: [{ id: 'week:2026-09-14', revision: 3 }],
+      mealPlanningState: [{ id: 'state', revision: 1 }],
+    });
+  });
+
+  it('returns an IDB request result and supports readonly reads without changing data', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    await expect(db.runMealPlanningTransaction('readwrite', ({ mealPlanningState }) =>
+      mealPlanningState.put({ id: 'state', revision: 2 }))).resolves.toBe('state');
+    await expect(db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) =>
+      mealPlanningState.get('state'))).resolves.toEqual({ id: 'state', revision: 2 });
+    await expect(db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) =>
+      mealPlanningState.get('missing'))).resolves.toBeUndefined();
+    await expect(db.runMealPlanningTransaction('readonly', () => ({ result: false }))).resolves.toBe(false);
+    await expect(db.runMealPlanningTransaction('readonly', () => {})).resolves.toBeUndefined();
+    expect(await readRawPlanningSnapshot()).toEqual({
+      ingredients: [], mealPlans: [], mealPlanningState: [{ id: 'state', revision: 2 }],
+    });
+  });
+
+  it('rolls back every queued write and preserves the original synchronous handler error', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    await db.saveIngredient({ id: 'stock', quantity: '1봉' });
+    await db.runMealPlanTransaction('readwrite', (store) => store.put({ id: 'week', revision: 1 }));
+    const originalError = new Error('invalid planning choice');
+
+    await expect(db.runMealPlanningTransaction('readwrite', (stores) => {
+      stores.ingredients.put({ id: 'stock', quantity: 'changed' });
+      stores.mealPlans.put({ id: 'week', revision: 2 });
+      stores.mealPlanningState.put({ id: 'state', revision: 1 });
+      throw originalError;
+    })).rejects.toBe(originalError);
+    expect(await readRawPlanningSnapshot()).toEqual({
+      ingredients: [{ id: 'stock', quantity: '1봉' }],
+      mealPlans: [{ id: 'week', revision: 1 }], mealPlanningState: [],
+    });
+  });
+
+  it('preserves a handler error even when the handler already aborted the transaction', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    const originalError = new Error('stale planning basis');
+    await expect(db.runMealPlanningTransaction('readwrite', ({ mealPlanningState }, transaction) => {
+      mealPlanningState.put({ id: 'state', revision: 1 });
+      transaction.abort();
+      throw originalError;
+    })).rejects.toBe(originalError);
+    expect((await readRawPlanningSnapshot()).mealPlanningState).toEqual([]);
+  });
+
+  it('rejects a promise-returning handler instead of committing before its result is available', async () => {
+    const db = await loadIndexedDbModule();
+    await expect(db.runMealPlanningTransaction('readwrite', (stores) => {
+      stores.ingredients.put({ id: 'must-not-commit' });
+      stores.mealPlanningState.put({ id: 'state', revision: 1 });
+      return Promise.resolve({ result: 'async handler result' });
+    })).rejects.toThrow('동기');
+    expect(await readRawPlanningSnapshot()).toEqual({ ingredients: [], mealPlans: [], mealPlanningState: [] });
+  });
+
+  it('rejects a later request failure instead of resolving an earlier successful request', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    await db.runMealPlanningTransaction('readwrite', ({ mealPlanningState }) =>
+      mealPlanningState.put({ id: 'state', revision: 1 }));
+
+    await expect(db.runMealPlanningTransaction('readwrite', (stores) => {
+      const first = stores.ingredients.put({ id: 'stock' });
+      stores.mealPlans.put({ id: 'week', revision: 1 });
+      stores.mealPlanningState.add({ id: 'state', revision: 2 });
+      return first;
+    })).rejects.toThrow();
+    expect(await readRawPlanningSnapshot()).toEqual({
+      ingredients: [], mealPlans: [], mealPlanningState: [{ id: 'state', revision: 1 }],
+    });
+  });
+
+  it('rolls back after a request callback explicitly aborts without returning its proposed result', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    await expect(db.runMealPlanningTransaction('readwrite', (stores, transaction) => {
+      const holder = { result: 'must not resolve' };
+      const read = stores.mealPlanningState.get('state');
+      read.onsuccess = () => {
+        stores.ingredients.put({ id: 'stock' });
+        stores.mealPlans.put({ id: 'week' });
+        stores.mealPlanningState.put({ id: 'state' });
+        transaction.abort();
+      };
+      return holder;
+    })).rejects.toThrow();
+    expect(await readRawPlanningSnapshot()).toEqual({ ingredients: [], mealPlans: [], mealPlanningState: [] });
+  });
+
+  it('respects readonly mode instead of allowing planning writes', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    await expect(db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) =>
+      mealPlanningState.put({ id: 'state' }))).rejects.toMatchObject({ name: 'ReadOnlyError' });
+    expect((await readRawPlanningSnapshot()).mealPlanningState).toEqual([]);
+  });
+
+  it('isolates the same planning ids between guests and different accounts', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    for (const scope of ['guest', 'user:alice', 'user:bob']) {
+      await db.runMealPlanningTransaction('readwrite', (stores) => {
+        stores.ingredients.put({ id: 'stock', owner: scope });
+        stores.mealPlans.put({ id: 'week', owner: scope });
+        return stores.mealPlanningState.put({ id: 'state', owner: scope });
+      }, { scope });
+    }
+    for (const scope of ['guest', 'user:alice', 'user:bob']) {
+      expect(await db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) =>
+        mealPlanningState.get('state'), scope)).toEqual({ id: 'state', owner: scope });
+      expect(await db.getIngredientById('stock', scope)).toEqual({ id: 'stock', owner: scope });
+      expect(await db.runMealPlanTransaction('readonly', (store) => store.get('week'), scope)).toEqual({ id: 'week', owner: scope });
+    }
+  });
+
+  it('releases its cached connection on versionchange and recreates all stores after deletion', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    await db.runMealPlanningTransaction('readwrite', ({ mealPlanningState }) => mealPlanningState.put({ id: 'state' }));
+    await new Promise((resolve, reject) => {
+      const request = window.indexedDB.deleteDatabase('fridgemate-db__guest');
+      request.onsuccess = resolve;
+      request.onerror = () => reject(request.error);
+      request.onblocked = () => reject(new Error('Planning connection did not close on versionchange'));
+    });
+    await expect(db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) =>
+      mealPlanningState.getAll())).resolves.toEqual([]);
+    expect(await readRawPlanningSnapshot()).toEqual({ ingredients: [], mealPlans: [], mealPlanningState: [] });
+  });
+
+  it('reports a blocked v2 upgrade and retries after the old tab closes', async () => {
+    const db = await loadIndexedDbModule();
+    expect(db.runMealPlanningTransaction).toBeTypeOf('function');
+    const old = await openRawDatabase({ version: 2, upgrade(database) {
+      database.createObjectStore('ingredients', { keyPath: 'id' });
+      database.createObjectStore('mealPlans', { keyPath: 'id' });
+    } });
+    try {
+      await expect(db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) =>
+        mealPlanningState.getAll())).rejects.toThrow('다른 탭');
+    } finally {
+      old.close();
+    }
+    await expect(db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) =>
+      mealPlanningState.getAll())).resolves.toEqual([]);
+  });
+
+  it('clears the deleted account planning state together with stock and plans, preserving other scopes', async () => {
+    const db = await loadIndexedDbModule();
+    for (const scope of ['guest', 'user:alice', 'user:bob']) {
+      await db.saveIngredient({ id: 'stock', owner: scope }, scope);
+      const raw = await openRawDatabase({ name: `fridgemate-db__${scope.replace(':', '_')}` });
+      await rawTransaction(raw, ['mealPlans', 'mealPlanningState'], 'readwrite', (transaction) => {
+        transaction.objectStore('mealPlans').put({ id: 'week', owner: scope });
+        transaction.objectStore('mealPlanningState').put({ id: 'state', owner: scope });
+      });
+      raw.close();
+    }
+    await db.clearAccountLocalData({ scope: 'user:alice' });
+
+    expect(await readRawPlanningSnapshot('fridgemate-db__user_alice')).toEqual({ ingredients: [], mealPlans: [], mealPlanningState: [] });
+    for (const scope of ['guest', 'user:bob']) {
+      expect(await readRawPlanningSnapshot(`fridgemate-db__${scope.replace(':', '_')}`)).toEqual({
+        ingredients: [{ id: 'stock', owner: scope }],
+        mealPlans: [{ id: 'week', owner: scope }],
+        mealPlanningState: [{ id: 'state', owner: scope }],
+      });
+    }
+  });
+
+  it('rolls back account clearing if clearing the new store throws synchronously', async () => {
+    const db = await loadIndexedDbModule();
+    await db.saveIngredient({ id: 'stock', quantity: '수동 수량' });
+    const raw = await openRawDatabase();
+    await rawTransaction(raw, ['mealPlans', 'mealPlanningState'], 'readwrite', (transaction) => {
+      transaction.objectStore('mealPlans').put({ id: 'week' });
+      transaction.objectStore('mealPlanningState').put({ id: 'state' });
+    });
+    const storePrototype = Object.getPrototypeOf(raw.transaction('mealPlanningState').objectStore('mealPlanningState'));
+    raw.close();
+    // Inject one storage failure while retaining actual IndexedDB writes and rollback.
+    const originalClear = storePrototype.clear;
+    const failure = new Error('planning storage could not be cleared');
+    const spy = vi.spyOn(storePrototype, 'clear').mockImplementation(function () {
+      if (this.name === 'mealPlanningState') throw failure;
+      return originalClear.call(this);
+    });
+    await expect(db.clearAccountLocalData()).rejects.toBe(failure);
+    spy.mockRestore();
+    expect(await readRawPlanningSnapshot()).toEqual({
+      ingredients: [{ id: 'stock', quantity: '수동 수량' }],
+      mealPlans: [{ id: 'week' }], mealPlanningState: [{ id: 'state' }],
+    });
   });
 });

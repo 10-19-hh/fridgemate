@@ -64,6 +64,13 @@ function createWeekPlan(weekStart, scope = 'guest') {
   return plan;
 }
 
+// Quantity approvals follow each week's confirmed plan, so tests save a draft and then confirm it.
+async function commitPlan(repository, plan, scope = 'guest') {
+  const current = await repository.getMealPlan(plan.weekStart, scope);
+  const saved = await repository.saveMealPlan(plan, scope, current?.revision ?? 0);
+  return repository.confirmMealPlan(plan.weekStart, scope, saved.revision);
+}
+
 describe('meal plan persistence', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -366,8 +373,8 @@ describe('meal plan persistence', () => {
     await saveMealPlan(createPlan(), 'guest', 0);
     expect(await getAllIngredients()).toEqual([ingredient]);
     const upgraded = await openRaw();
-    expect(upgraded.version).toBe(7);
-    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
+    expect(upgraded.version).toBe(8);
+    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlanningState', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
     upgraded.close();
   });
 
@@ -391,8 +398,8 @@ describe('meal plan persistence', () => {
     expect(await db.getAllIngredients()).toEqual([ingredient]);
     expect(await db.getMenuDecision('2026-09-14')).toEqual(decision);
     const upgraded = await openRaw();
-    expect(upgraded.version).toBe(7);
-    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
+    expect(upgraded.version).toBe(8);
+    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlanningState', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
     upgraded.close();
   });
 
@@ -417,8 +424,8 @@ describe('meal plan persistence', () => {
     expect(await db.getMenuDecision('2026-09-14')).toEqual(decision);
     expect(await repository.getMealPlan('2026-09-14')).toEqual(createEnvelope(plan));
     const upgraded = await openRaw();
-    expect(upgraded.version).toBe(7);
-    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
+    expect(upgraded.version).toBe(8);
+    expect(Array.from(upgraded.objectStoreNames)).toEqual(['ingredients', 'inventoryEvents', 'inventoryQuantities', 'mealPlanPilot', 'mealPlanningState', 'mealPlans', 'menuDecisions', 'shoppingEntries']);
     expect(await rawRead(upgraded)).toEqual(plan);
     upgraded.close();
   });
@@ -502,6 +509,59 @@ describe('meal plan persistence', () => {
     await expect(repository.saveMealPlan(createPlan('guest', { revision: 2, invalid: () => {} }), 'guest', 1)).rejects.toThrow();
     expect((await repository.getMealPlan('2026-09-14')).revision).toBe(1);
     expect(await repository.getMealPlan('2026-09-14')).toEqual(previous);
+  });
+
+  it('rejects a locked slot skip at the persistence boundary, including callers bypassing the UI', async () => {
+    const repository = await import('../mealPlanRepository.js');
+    const { generateMealPlan, toggleMealPlanSlotLock, setMealPlanSlotSkipped } = await import('../mealPlanDomain.js');
+    const plan = toggleMealPlanSlotLock(generateMealPlan({ weekStart: '2026-09-14' }), '2026-09-16:dinner');
+    const saved = await repository.saveMealPlan(plan, 'guest', 0);
+    const skippedPlan = setMealPlanSlotSkipped(generateMealPlan({ weekStart: '2026-09-14' }), '2026-09-16:dinner', true);
+    const bypass = { ...skippedPlan, slots: skippedPlan.slots.map((slot) => (slot.id === '2026-09-16:dinner' ? { ...slot, locked: true } : slot)) };
+    await expect(repository.saveMealPlan(bypass, 'guest', saved.revision)).rejects.toThrow();
+    expect((await repository.getMealPlan('2026-09-14')).draft.slots[2]).toMatchObject({ status: 'planned', locked: true });
+  });
+
+  it('suspends an approved portion atomically with a skip and never revives it on restore', async () => {
+    const repository = await import('../mealPlanRepository.js');
+    const db = await import('../../../db/indexedDB.js');
+    const { generateMealPlan, setMealPlanSlotSkipped } = await import('../mealPlanDomain.js');
+    const { getPlanningSlotBasis } = await import('../mealPlanningBindings.js');
+    const plan = generateMealPlan({ weekStart: '2026-09-14' });
+    await commitPlan(repository, plan);
+    const state = { id: 'state', schemaVersion: 1, scope: 'guest', revision: 1,
+      stockInventoryBasis: null, stockConfirmations: [], commitments: [{
+        id: 'approved-side', status: 'active', planId: plan.id, slotId: plan.slots[2].id,
+        slotBasis: getPlanningSlotBasis(plan, plan.slots[2]), quantityChoice: { scaleFactor: 0.5 },
+      }] };
+    await db.runMealPlanningTransaction('readwrite', ({ mealPlanningState }) => mealPlanningState.put(state));
+    const skipped = setMealPlanSlotSkipped(plan, plan.slots[2].id, true);
+    await commitPlan(repository, skipped);
+    const read = () => db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) => mealPlanningState.get('state'));
+    expect((await read()).commitments[0]).toMatchObject({ status: 'suspended', suspensionReason: 'skipped',
+      quantityChoice: { scaleFactor: 0.5 } });
+    expect((await read()).revision).toBe(2);
+    await commitPlan(repository, setMealPlanSlotSkipped(skipped, plan.slots[2].id, false));
+    expect((await read()).commitments[0].status).toBe('suspended');
+  });
+
+  it('preserves approved quantities when deleting a plan as inactive history, not future demand', async () => {
+    const repository = await import('../mealPlanRepository.js');
+    const db = await import('../../../db/indexedDB.js');
+    const { generateMealPlan } = await import('../mealPlanDomain.js');
+    const { getPlanningSlotBasis } = await import('../mealPlanningBindings.js');
+    const plan = generateMealPlan({ weekStart: '2026-09-14' });
+    await commitPlan(repository, plan);
+    await db.runMealPlanningTransaction('readwrite', ({ mealPlanningState }) => mealPlanningState.put({
+      id: 'state', schemaVersion: 1, scope: 'guest', revision: 1, stockInventoryBasis: null, stockConfirmations: [],
+      commitments: [{ id: 'side', status: 'active', planId: plan.id, slotId: plan.slots[2].id,
+        slotBasis: getPlanningSlotBasis(plan, plan.slots[2]), quantityChoice: { scaleFactor: 0.5 } }],
+    }));
+    await repository.clearMealPlans();
+    const state = await db.runMealPlanningTransaction('readonly', ({ mealPlanningState }) => mealPlanningState.get('state'));
+    expect(state.commitments[0]).toMatchObject({ status: 'suspended', suspensionReason: 'plan_removed',
+      quantityChoice: { scaleFactor: 0.5 } });
+    expect(await repository.getMealPlan('2026-09-14')).toBeNull();
   });
 
   it('rejects non-text notices on read and write without replacing stored data', async () => {
