@@ -46,6 +46,21 @@ describe('recommendationEventsApi', () => {
     );
   });
 
+  it('keeps recipe quantity confirmations and private context out of analytics payloads', () => {
+    const payload = buildRecommendationEventPayload({
+      id: 'mfds:29', title: '부추 콩가루 찜', canMakeNow: false,
+      quantitySource: { kind: 'mfds-cookrcp01', id: '29', version: '1' },
+      quantityResult: { ingredients: [{ scaledAmount: 12.3456789 }], basis: { scope: 'private-user' } },
+      quantityContext: { inventoryRevision: '[private raw inventory]', scope: 'private-user' },
+      confirmation: { inventory: { items: [{ amount: 12.3456789 }] } },
+    }, 'click');
+    expect(payload.recipeId).toBe('local:mfds:29');
+    const serialized = JSON.stringify(payload);
+    for (const privateValue of ['quantitySource', 'quantityResult', 'quantityContext', 'confirmation', 'private-user', 'private raw inventory', '12.3456789']) {
+      expect(serialized).not.toContain(privateValue);
+    }
+  });
+
   it('sends recommendation events sequentially to avoid connection bursts', async () => {
     let resolveFirstRequest;
     requestJsonMock

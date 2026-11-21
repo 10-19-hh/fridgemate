@@ -9,6 +9,7 @@ import {
 import { getIngredientHubsForRecipe } from '../features/recipes/recipeContentHubs';
 import { getRecipeEditorial, editorialReviewNote } from '../features/recipes/recipeEditorialContent';
 import RecipePreparationChecklist from '../components/RecipePreparationChecklist';
+import PublicRecipeQuantityPreview from '../features/recipes/PublicRecipeQuantityPreview';
 
 const NUTRITION_FIELDS = [
   ['열량', 'calories', 'kcal'],
@@ -103,6 +104,8 @@ function PublicRecipePage() {
           ))}
         </ul>
       </section>
+
+      <PublicRecipeQuantityPreview publicRecipe={recipe} />
 
       <section className="card space-y-5">
         <div>
