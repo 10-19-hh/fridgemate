@@ -35,13 +35,13 @@ function buildSectionStats({ loading, readyRecommendations, buyOneRecommendation
       value: loading ? '...' : readyRecommendations.length,
       helper: loading
         ? '추천을 정리 중이에요'
-        : getSectionHelperText(readyRecommendations.length, '아직 없어요', '바로 해볼 수 있어요', '오늘 바로 고를 수 있어요')
+        : getSectionHelperText(readyRecommendations.length, '아직 없어요', '분량은 별도 확인해 주세요', '분량은 별도 확인해 주세요')
     },
     buyOne: {
       value: loading ? '...' : buyOneRecommendations.length,
       helper: loading
         ? '추천을 정리 중이에요'
-        : getSectionHelperText(buyOneRecommendations.length, '일부 재료가 맞는 후보만 보여줘요', '하나만 채우면 돼요', '장보기 효율이 좋아요')
+        : getSectionHelperText(buyOneRecommendations.length, '일부 재료가 맞는 후보만 보여줘요', '양념과 분량은 별도 확인', '양념과 분량은 별도 확인')
     },
     useSoon: {
       value: loading ? '...' : useSoonRecommendations.length,
@@ -63,7 +63,7 @@ export function useRecipesPageModel() {
         .map((staple) => staple.name),
     [pantryOwnership, pantryStaples]
   );
-  const { recommendations, loading, ingredients, readError, loadIngredients } = useLocalRecommendations(ownedPantryItems);
+  const { recommendations, loading, error: recommendationError, ingredients, readError, loadIngredients } = useLocalRecommendations(ownedPantryItems);
   const summary = useMemo(() => getDashboardSummary(ingredients), [ingredients]);
   const missingBasicIngredients = useMemo(() => getMissingBasicIngredients(ingredients), [ingredients]);
   const activeIngredientCount = useMemo(() => ingredients.filter((ingredient) => !ingredient.consumed).length, [ingredients]);
@@ -114,6 +114,7 @@ export function useRecipesPageModel() {
     loading,
     readError,
     loadIngredients,
+    recommendationError,
     ingredients,
     summary,
     missingBasicIngredients,
@@ -122,6 +123,9 @@ export function useRecipesPageModel() {
     readyRecommendations,
     buyOneRecommendations,
     useSoonRecommendations,
+    quantityReadyRecommendations: recommendationGroups.quantityReady,
+    quantityNeedsConfirmationRecommendations: recommendationGroups.quantityNeedsConfirmation,
+    quantityUnavailableRecommendations: recommendationGroups.quantityUnavailable,
     ownedPantryCount,
     fridgeInsight,
     sectionStats

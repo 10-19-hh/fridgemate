@@ -24,9 +24,25 @@ export function getSectionHelperText(count, emptyText, lowText, positiveText) {
   return positiveText;
 }
 
+export function getQuantityRecommendationGroup(recommendation) {
+  const result = recommendation.quantityResult;
+  if (!recommendation.quantitySource && !result) return null;
+  if (result?.status === 'unavailable' || result?.status === 'invalid') return 'quantityUnavailable';
+  const hasPositiveQuantity = (result?.status === 'original' || result?.status === 'scaled')
+    && Number.isFinite(result.scaleFactor) && result.scaleFactor > 0 && result.scaleFactor <= 1;
+  return hasPositiveQuantity && result.requirementsStatus === 'satisfied'
+    ? 'quantityReady' : 'quantityNeedsConfirmation';
+}
+
 export function splitRecommendationsByReadiness(recommendations = []) {
   return recommendations.reduce(
     (groups, recommendation) => {
+      const quantityGroup = getQuantityRecommendationGroup(recommendation);
+      if (quantityGroup) {
+        groups[quantityGroup].push(recommendation);
+        return groups;
+      }
+
       if (recommendation.isPersonalized === false) return groups;
       const missingCore = recommendation.missingCore || recommendation.missingIngredients || [];
       const missingGroups = recommendation.missingGroups || [];
@@ -77,7 +93,10 @@ export function splitRecommendationsByReadiness(recommendations = []) {
       buyOneMore: [],
       useSoon: [],
       needsSeasonings: [],
-      other: []
+      other: [],
+      quantityReady: [],
+      quantityNeedsConfirmation: [],
+      quantityUnavailable: []
     }
   );
 }

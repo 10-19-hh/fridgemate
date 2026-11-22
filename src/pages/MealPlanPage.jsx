@@ -42,7 +42,7 @@ function MealPlanWorkspace() {
   const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const { plan, record, confirmedPlan, hasDraft, recordRevision, loading, ready, saving, error, savePlan, generatePlan, confirmPlan, restoreOverdueDraft, retryLoad, storageScope } = useMealPlan(weekStart);
   const overdueConflicts = getOverdueMealPlanDraftConflicts(record, today);
-  const { ingredients, loading: inventoryLoading, error: inventoryError, loadIngredients } = useIngredients();
+  const { ingredients, loading: inventoryLoading, error: inventoryError, inventoryScope, loadIngredients } = useIngredients();
   const [receiptRevision, setReceiptRevision] = useState(0);
   const [cookingRevision, setCookingRevision] = useState(0);
   const [cookingTarget, setCookingTarget] = useState(null);
@@ -110,7 +110,7 @@ function MealPlanWorkspace() {
 
       {error && <div role="alert" className="rounded-md border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-900"><p>{error}</p><button type="button" className="mt-2 underline" disabled={saving || loading} onClick={retryLoad}>저장된 식단 다시 불러오기</button></div>}
       {loading ? <p className="py-12 text-center text-sm muted" role="status">식단을 불러오는 중이에요.</p> : ready && (
-        <MealPlanEditor key={`${storageScope}:${weekStart}`} {...{ plan, confirmedPlan, hasDraft, weekStart, storageScope, saving, savePlan, generatePlan, confirmPlan, restoreOverdueDraft, overdueConflicts, today, ingredients, inventoryLoading, inventoryError, pantryItems }} editingDisabled={cookingOpen || changeOpen} onOpenCooking={openCooking} onOpenChange={openChange} />
+        <MealPlanEditor key={`${storageScope}:${weekStart}`} inventoryScopeReady={inventoryScope === storageScope} {...{ plan, confirmedPlan, hasDraft, weekStart, storageScope, saving, savePlan, generatePlan, confirmPlan, restoreOverdueDraft, overdueConflicts, today, ingredients, inventoryLoading, inventoryError, pantryItems }} editingDisabled={cookingOpen || changeOpen} onOpenCooking={openCooking} onOpenChange={openChange} />
       )}
 
       {cookingOpen ? <MealCookingPanel scope={storageScope} weekStart={weekStart} slotId={cookingTarget.slotId} onChanged={refreshAfterPlanningWrite} onClose={closeCooking} /> : null}
