@@ -65,7 +65,7 @@
   "devDependencies": {
     "@eslint/js": "^9.39.5",
     "@playwright/test": "^1.65.0",
-    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/jest-dom": "^8.0.0",
     "@tesseract.js-data/eng": "^1.0.0",
     "@tesseract.js-data/kor": "^1.0.0",
     "@testing-library/react": "^16.3.3",
